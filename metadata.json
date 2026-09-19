@@ -1,0 +1,6 @@
+{
+  "name": "OddCerta Live Monitor",
+  "description": "Monitoramento e análise manual de partidas de futebol ao vivo por janelas de tempo de Over e intensidade recente.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

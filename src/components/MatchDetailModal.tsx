@@ -189,8 +189,11 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
       ? '+3 ou mais gols'
       : 'Cenário live';
 
-  // Eventos reais da partida (Item 13)
-  const matchEvents: MatchEventItem[] = events && events.length > 0 ? events : [];
+  // Eventos reais da partida (Item 13) - ordenados com os mais recentes no topo
+  const matchEvents: MatchEventItem[] = useMemo(() => {
+    if (!events || events.length === 0) return [];
+    return [...events].sort((a, b) => b.minute - a.minute);
+  }, [events]);
 
   // Filtro de janela de tempo nas estatísticas: 'all' | '15' | '10' | '5'
   const [statsFilter, setStatsFilter] = useState<'all' | '15' | '10' | '5'>('all');

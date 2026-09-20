@@ -34,6 +34,9 @@ export const MatchTimeline15m: React.FC<MatchTimeline15mProps> = ({
     (a) => a.minute >= windowStart && a.minute <= windowEnd
   );
 
+  // Ordenar lances com o mais recente no topo (ordem cronológica decrescente)
+  const sortedActions = [...actions].sort((a, b) => b.minute - a.minute);
+
   // Totais agregados com fallback caso a ESPN não traga texto de comentários
   const fallbackGoals = (recent15Home?.goals ?? 0) + (recent15Away?.goals ?? 0);
   const fallbackSot = (recent15Home?.shotsOnTarget ?? 0) + (recent15Away?.shotsOnTarget ?? 0);
@@ -182,7 +185,7 @@ export const MatchTimeline15m: React.FC<MatchTimeline15mProps> = ({
 
           {isExpanded && (
             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-0.5 divide-y divide-slate-850/60">
-              {actions.map((act) => {
+              {sortedActions.map((act) => {
                 const formatted = formatTimelineAction(act);
                 const isSelected = selectedActionId === act.id;
 

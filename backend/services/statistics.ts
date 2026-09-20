@@ -892,8 +892,8 @@ export class StatisticsService {
       }
     }
 
-    // Sort chronologically
-    actions.sort((a, b) => a.minute - b.minute);
+    // Sort descending (most recent action first)
+    actions.sort((a, b) => b.minute - a.minute);
 
     return actions;
   }

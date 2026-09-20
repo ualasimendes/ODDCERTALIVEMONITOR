@@ -56,12 +56,19 @@ export class EspnProvider implements SoccerDataProvider {
 
     const scoreboardResults = await Promise.all(scoreboardPromises);
 
+    const hasAnyLiveMatches = scoreboardResults.some((r) =>
+      r.events.some((e: any) => e.status?.type?.state === 'in')
+    );
+
     // For every match found (especially live 'in' matches), fetch summary for detailed stats, xG and odds
     const detailPromises: Promise<RawMatchSummary | null>[] = [];
 
     for (const res of scoreboardResults) {
-      for (const ev of res.events) {
-        // Prioritize in-game matches
+      const targetEvents = hasAnyLiveMatches
+        ? res.events.filter((e: any) => e.status?.type?.state === 'in')
+        : res.events.slice(0, 1);
+
+      for (const ev of targetEvents) {
         detailPromises.push(this.getMatchDetail(ev.id, res.leagueId, ev));
       }
     }
@@ -151,14 +158,24 @@ export class EspnProvider implements SoccerDataProvider {
         }
       }
 
-      // Extract xG from summary.leaders
+      // Extract xG from summary.leaders (Opta expected goals)
       let homeXg: number | null = null;
       let awayXg: number | null = null;
+      let homePlayerXgSum = 0;
+      let awayPlayerXgSum = 0;
 
       if (data.leaders && Array.isArray(data.leaders)) {
         for (const l of data.leaders) {
-          const teamId = l.team?.id;
-          const isHomeTeam = teamId === homeTeam.id || l.team?.displayName === homeTeam.name;
+          const teamId = l.team?.id ? String(l.team.id) : '';
+          const teamDisplay = (l.team?.displayName || '').toLowerCase();
+          const teamName = (l.team?.name || '').toLowerCase();
+          const teamAbbr = (l.team?.abbreviation || '').toLowerCase();
+
+          const isHomeTeam =
+            (teamId && teamId === String(homeTeam.id)) ||
+            (teamDisplay && (teamDisplay === homeTeam.name.toLowerCase() || teamDisplay === homeTeam.shortName.toLowerCase())) ||
+            (teamName && (teamName === homeTeam.name.toLowerCase() || teamName === homeTeam.shortName.toLowerCase())) ||
+            (teamAbbr && teamAbbr === homeTeam.abbreviation.toLowerCase());
 
           l.leaders?.forEach((cat: any) => {
             cat.leaders?.forEach((ath: any) => {
@@ -166,7 +183,7 @@ export class EspnProvider implements SoccerDataProvider {
                 const val = parseFloat(st.value);
                 if (!isNaN(val)) {
                   // In ESPN soccer:
-                  // goalkeeper's expectedGoalsConceded (xGC) = opposing team's xG
+                  // 1. Goalkeeper's expectedGoalsConceded (xGC) = opposing team's xG (Opta standard)
                   if (st.name === 'expectedGoalsConceded') {
                     if (isHomeTeam) {
                       // Home goalkeeper xGC is Away team xG
@@ -176,10 +193,27 @@ export class EspnProvider implements SoccerDataProvider {
                       if (homeXg === null || val > homeXg) homeXg = val;
                     }
                   }
+
+                  // 2. Outfield player expectedGoals in category leaders
+                  if (st.name === 'expectedGoals') {
+                    if (isHomeTeam) {
+                      homePlayerXgSum += val;
+                    } else {
+                      awayPlayerXgSum += val;
+                    }
+                  }
                 }
               });
             });
           });
+        }
+
+        // If opposing goalkeeper had 0 saves (no xGC registered), but players have recorded xG
+        if (homeXg === null && homePlayerXgSum > 0) {
+          homeXg = parseFloat(homePlayerXgSum.toFixed(2));
+        }
+        if (awayXg === null && awayPlayerXgSum > 0) {
+          awayXg = parseFloat(awayPlayerXgSum.toFixed(2));
         }
       }
 

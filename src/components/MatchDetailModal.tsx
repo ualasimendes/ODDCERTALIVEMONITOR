@@ -639,16 +639,24 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase whitespace-nowrap border ${
                             filteredStats.intensityTag === 'MEGA_HOT'
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                              ? intensity.hasRecentGoal
+                                ? 'bg-rose-950/80 text-rose-300 border-rose-700/60'
+                                : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
                               : filteredStats.intensityTag === 'HOT'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              ? intensity.hasRecentGoal
+                                ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                                : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                               : 'bg-slate-800 text-slate-400 border-slate-700'
                           }`}
                         >
                           {filteredStats.intensityTag === 'MEGA_HOT'
-                            ? '🔥🔥 MEGA HOT'
+                            ? intensity.hasRecentGoal
+                              ? '⚠️ MEGA HOT (PÓS-GOL)'
+                              : '🔥🔥 MEGA HOT (PRÉ-GOL)'
                             : filteredStats.intensityTag === 'HOT'
-                            ? '🔥 HOT'
+                            ? intensity.hasRecentGoal
+                              ? '⚠️ HOT (PÓS-GOL)'
+                              : '🔥 HOT (PRÉ-GOL)'
                             : 'NORMAL'}
                         </span>
                         <button

@@ -40,6 +40,7 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCompetition, setSelectedCompetition] = useState<string>('ALL');
   const [selectedIntensity, setSelectedIntensity] = useState<IntensityLevel | 'ALL'>('ALL');
+  const [onlyPreGoal, setOnlyPreGoal] = useState<boolean>(false);
   const [oddFilter, setOddFilter] = useState<OddFilterOption>('all');
   const [customOddMin, setCustomOddMin] = useState<number>(2.0);
   const [minuteFilter, setMinuteFilter] = useState<MinuteFilterOption>('auto');
@@ -195,19 +196,41 @@ export function App() {
   // Reset filters handler
   const handleResetFilters = () => {
     setSelectedCompetition('ALL');
+    setSelectedIntensity('ALL');
+    setOnlyPreGoal(false);
   };
 
-  // Calculate if any filters are active (Somente Campeonatos)
+  // Calculate if any filters are active (Campeonatos, Intensidade ou Pré-Gol)
   const hasActiveFilters = useMemo(() => {
-    return selectedCompetition !== 'ALL';
-  }, [selectedCompetition]);
+    return selectedCompetition !== 'ALL' || selectedIntensity !== 'ALL' || onlyPreGoal;
+  }, [selectedCompetition, selectedIntensity, onlyPreGoal]);
+
+  // Hot, Mega Hot and Pre-Goal counts based on current tab & competition
+  const hotCounts = useMemo(() => {
+    const base = currentTab === 'all' ? rawMatches : rawMatches.filter((m) => m.tab === currentTab);
+    const compFiltered = selectedCompetition === 'ALL' ? base : base.filter((m) => m.competitionName === selectedCompetition);
+    return {
+      all: compFiltered.length,
+      hot: compFiltered.filter((m) => m.intensity.primaryTag === 'HOT').length,
+      mega_hot: compFiltered.filter((m) => m.intensity.primaryTag === 'MEGA_HOT').length,
+    };
+  }, [rawMatches, currentTab, selectedCompetition]);
+
+  const preGoalCount = useMemo(() => {
+    const base = currentTab === 'all' ? rawMatches : rawMatches.filter((m) => m.tab === currentTab);
+    const compFiltered = selectedCompetition === 'ALL' ? base : base.filter((m) => m.competitionName === selectedCompetition);
+    // Jogos com pressão e sem gol recente
+    return compFiltered.filter((m) => !m.intensity.hasRecentGoal && (m.intensity.primaryTag === 'HOT' || m.intensity.primaryTag === 'MEGA_HOT')).length;
+  }, [rawMatches, currentTab, selectedCompetition]);
 
   // Build active filter descriptions for Section 18
   const activeFilterDescriptions = useMemo(() => {
     const desc: string[] = [];
     if (selectedCompetition !== 'ALL') desc.push(selectedCompetition);
+    if (selectedIntensity !== 'ALL') desc.push(selectedIntensity === 'MEGA_HOT' ? 'MEGA HOT' : 'HOT');
+    if (onlyPreGoal) desc.push('Apenas Pré-Gol (sem gol recente)');
     return desc;
-  }, [selectedCompetition]);
+  }, [selectedCompetition, selectedIntensity, onlyPreGoal]);
 
   // Filter and sort matches strictly according to user selections
   const filteredAndSortedMatches = useMemo(() => {
@@ -216,6 +239,16 @@ export function App() {
     // Dynamic Competition filter (Section 6)
     if (selectedCompetition !== 'ALL') {
       result = result.filter((m) => m.competitionName === selectedCompetition);
+    }
+
+    // Dynamic Intensity filter (HOT / MEGA_HOT)
+    if (selectedIntensity !== 'ALL') {
+      result = result.filter((m) => m.intensity.primaryTag === selectedIntensity);
+    }
+
+    // Dynamic Pre-Goal filter (Oculta jogos com gol recente / inflados por gol)
+    if (onlyPreGoal) {
+      result = result.filter((m) => !m.intensity.hasRecentGoal);
     }
 
     // Sorting (Section 11)
@@ -344,7 +377,7 @@ export function App() {
       </div>
 
       {/* Main Container */}
-      <main className="relative z-10 flex-1 max-w-7xl 2xl:max-w-[1536px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+      <main className="relative z-10 flex-1 max-w-7xl 2xl:max-w-[1536px] w-full mx-auto px-2 sm:px-6 lg:px-8 py-3 sm:py-4 space-y-3 sm:space-y-4">
         {/* Error message if disconnected */}
         {errorMessage && (
           <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3 rounded-2xl flex items-center justify-between text-xs font-mono">
@@ -457,11 +490,17 @@ export function App() {
               counts={counts}
             />
 
-            {/* 3. FILTRO DE CAMPEONATOS */}
+            {/* 3. FILTROS DE INTENSIDADE (HOT E MEGA HOT), PRÉ-GOL E CAMPEONATOS */}
             <FilterBar
               availableCompetitions={availableCompetitions}
               selectedCompetition={selectedCompetition}
               onSelectCompetition={setSelectedCompetition}
+              selectedIntensity={selectedIntensity}
+              onSelectIntensity={setSelectedIntensity}
+              onlyPreGoal={onlyPreGoal}
+              onTogglePreGoal={() => setOnlyPreGoal((prev) => !prev)}
+              preGoalCount={preGoalCount}
+              hotCounts={hotCounts}
               onResetFilters={handleResetFilters}
               hasActiveFilters={hasActiveFilters}
             />

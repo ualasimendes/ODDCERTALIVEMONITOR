@@ -168,8 +168,8 @@ class GamesService {
       minute,
       homeScore: raw.homeTeam.score,
       awayScore: raw.awayTeam.score,
-      homeXg: raw.homeXg,
-      awayXg: raw.awayXg,
+      homeXg: homeStats.xg,
+      awayXg: awayStats.xg,
       totalXg: accumulated.xg,
       homeShots: homeStats.totalShots,
       awayShots: awayStats.totalShots,
@@ -227,13 +227,43 @@ class GamesService {
       console.warn(`[GamesService] Error computing history for game ${raw.id}:`, hErr?.message || hErr);
     }
 
-    // Evaluate Intensity based on real xG deltas AND historical Over rate of indicated line
+    // Calculate recent goal info to identify post-goal artifacts vs pure pre-goal pressure
+    let lastGoalMinute: number | null = null;
+    if (raw.events && raw.events.length > 0) {
+      const goalEvents = raw.events.filter(
+        (e) => e.type === 'goal' || e.shortText?.toLowerCase().includes('goal') || e.text?.toLowerCase().includes('goal')
+      );
+      if (goalEvents.length > 0) {
+        lastGoalMinute = Math.max(...goalEvents.map((g) => g.minute));
+      }
+    }
+    if (lastGoalMinute === null && allSnapshots.length >= 2) {
+      const sortedSnaps = [...allSnapshots].sort((a, b) => a.minute - b.minute);
+      for (let i = sortedSnaps.length - 1; i > 0; i--) {
+        const prev = sortedSnaps[i - 1];
+        const curr = sortedSnaps[i];
+        if (curr.homeScore + curr.awayScore > prev.homeScore + prev.awayScore) {
+          lastGoalMinute = curr.minute;
+          break;
+        }
+      }
+    }
+
+    const minutesSinceLastGoal = lastGoalMinute !== null ? Math.max(0, minute - lastGoalMinute) : null;
+    const hasRecentGoal = lastGoalMinute !== null && minutesSinceLastGoal !== null && minutesSinceLastGoal <= 12;
+
+    // Evaluate Intensity based on real xG deltas, historical Over rate, and recent goal filtering
     const intensity = signalsService.evaluateIntensity(
       recent15.xg,
       recent10.xg,
       recent5.xg,
       history,
-      targetOver.targetLine
+      targetOver.targetLine,
+      {
+        hasRecentGoal,
+        goalMinute: lastGoalMinute,
+        minutesSinceLastGoal,
+      }
     );
 
     // Record signal in DB
@@ -295,6 +325,7 @@ class GamesService {
       snapshots: allSnapshots.slice(-15),
       history,
       events: raw.events || [],
+      timeline15m: statisticsService.extractRecentTimeline(raw, 15),
       lastUpdated: nowIso,
     };
   }

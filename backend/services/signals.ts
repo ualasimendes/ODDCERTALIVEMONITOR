@@ -178,7 +178,8 @@ export class SignalsService {
     xg10: number | null,
     xg5: number | null,
     history?: MatchHistoricalProbability | null,
-    targetLine?: number
+    targetLine?: number,
+    recentGoalInfo?: { hasRecentGoal: boolean; goalMinute: number | null; minutesSinceLastGoal: number | null }
   ): IntensityBreakdown {
     // Determine historical over rate of the indicated line
     let histRate: number | null = history?.historicalEstimatePercent ?? null;
@@ -191,6 +192,10 @@ export class SignalsService {
         histRate = history.away.overTargetRatePercent;
       }
     }
+
+    const hasRecentGoal = Boolean(recentGoalInfo?.hasRecentGoal);
+    const recentGoalMinute = recentGoalInfo?.goalMinute ?? null;
+    const minutesSinceLastGoal = recentGoalInfo?.minutesSinceLastGoal ?? null;
 
     let mega15Threshold = 0.35;
     let hot15Threshold = 0.20;
@@ -267,7 +272,9 @@ export class SignalsService {
       const triggerWin = tag15 === 'MEGA_HOT' ? "15'" : tag10 === 'MEGA_HOT' ? "10'" : "5'";
       const triggerXg = tag15 === 'MEGA_HOT' ? xg15 : tag10 === 'MEGA_HOT' ? xg10 : xg5;
 
-      if (histRate !== null && histRate >= 55) {
+      if (hasRecentGoal) {
+        confluenceReason = `Pós-Gol (${recentGoalMinute}'): Pressão de xG ${triggerWin} (+${triggerXg?.toFixed(2)}) com gol recente`;
+      } else if (histRate !== null && histRate >= 55) {
         confluenceReason = `MEGA HOT: Confluência de xG ${triggerWin} (+${triggerXg?.toFixed(2)}) + ${histRate}% histórico no ${lineDesc}`;
       } else if (histRate !== null && histRate < 40) {
         confluenceReason = `MEGA HOT: Pressão extrema ao vivo (+${triggerXg?.toFixed(2)} em ${triggerWin}) superando perfil Under (${histRate}%)`;
@@ -279,7 +286,9 @@ export class SignalsService {
       const triggerWin = tag15 === 'HOT' ? "15'" : tag10 === 'HOT' ? "10'" : "5'";
       const triggerXg = tag15 === 'HOT' ? xg15 : tag10 === 'HOT' ? xg10 : xg5;
 
-      if (histRate !== null && histRate >= 55) {
+      if (hasRecentGoal) {
+        confluenceReason = `Pós-Gol (${recentGoalMinute}'): Pressão de xG ${triggerWin} (+${triggerXg?.toFixed(2)}) com gol recente`;
+      } else if (histRate !== null && histRate >= 55) {
         confluenceReason = `HOT: Pressão de xG ${triggerWin} (+${triggerXg?.toFixed(2)}) confirmada por ${histRate}% histórico no ${lineDesc}`;
       } else {
         confluenceReason = `HOT: Pressão recente ativa de xG ${triggerWin} (+${triggerXg?.toFixed(2)})`;
@@ -296,6 +305,10 @@ export class SignalsService {
       primaryTag,
       historicalOverRate: histRate,
       confluenceReason,
+      hasRecentGoal,
+      recentGoalMinute,
+      minutesSinceLastGoal,
+      isPreGoalPressure: !hasRecentGoal && (primaryTag === 'HOT' || primaryTag === 'MEGA_HOT'),
     };
   }
 }

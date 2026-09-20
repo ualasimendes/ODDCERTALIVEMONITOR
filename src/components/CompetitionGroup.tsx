@@ -74,8 +74,8 @@ export const CompetitionGroup: React.FC<CompetitionGroupProps> = ({
         </span>
       </div>
 
-      {/* Grid of Matches: 1 col (mobile), 2 cols (tablet), 3 cols (desktop) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* Grid of Matches: 2 cols on mobile, 2 cols on tablet, 3 cols on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4">
         <AnimatePresence mode="popLayout">
           {matches.map((match) => (
             <MatchCard

@@ -109,6 +109,11 @@ export interface IntensityBreakdown {
   primaryTag: IntensityLevel;
   historicalOverRate?: number | null;
   confluenceReason?: string;
+  // Métricas Pré-Gol (isolando o impacto de gols recentes que inflam o xG)
+  hasRecentGoal?: boolean;
+  recentGoalMinute?: number | null;
+  minutesSinceLastGoal?: number | null;
+  isPreGoalPressure?: boolean;
 }
 
 export interface OverMarketTarget {
@@ -183,6 +188,22 @@ export interface MatchEventItem {
   isHome?: boolean;
 }
 
+export interface MatchTimelineAction {
+  id: string;
+  minute: number;
+  timeDisplay: string;
+  isHome: boolean;
+  teamName: string;
+  teamAbbr?: string;
+  isGoal: boolean;
+  isOnTarget: boolean; // finalização no gol
+  isInsideBox: boolean; // finalização dentro da área
+  isOffTarget: boolean; // finalização pra fora ou bloqueada
+  player?: string;
+  description: string;
+  xg: number; // xG da ação
+}
+
 export interface TeamHistoricalPerformance {
   teamId: string;
   teamName: string;
@@ -248,6 +269,7 @@ export interface LiveMatchData {
   snapshots: GameSnapshot[];
   history?: MatchHistoricalProbability;
   events?: MatchEventItem[];
+  timeline15m?: MatchTimelineAction[];
   lastUpdated: string;
 }
 

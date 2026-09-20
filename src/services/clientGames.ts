@@ -205,8 +205,8 @@ export class ClientGamesService {
       minute,
       homeScore: raw.homeTeam.score,
       awayScore: raw.awayTeam.score,
-      homeXg: raw.homeXg,
-      awayXg: raw.awayXg,
+      homeXg: homeStats.xg,
+      awayXg: awayStats.xg,
       totalXg: accumulated.xg,
       homeShots: homeStats.totalShots,
       awayShots: awayStats.totalShots,
@@ -311,6 +311,7 @@ export class ClientGamesService {
       snapshots: allSnapshots.slice(-15),
       history,
       events: raw.events || [],
+      timeline15m: this.statisticsService.extractRecentTimeline(raw, 15),
       lastUpdated: nowIso,
     };
   }

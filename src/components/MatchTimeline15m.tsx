@@ -54,23 +54,20 @@ export const MatchTimeline15m: React.FC<MatchTimeline15mProps> = ({
 
   return (
     <div className={containerClasses}>
-      {/* 1. Cabeçalho Compacto: Janela e 5 Métricas Chave */}
-      <div className="flex items-center justify-between gap-1 pb-1 border-b border-slate-850/80">
+      {/* 1. Cabeçalho Compacto: Janela e 5 Métricas Chave (Apenas Números) */}
+      <div className="flex items-center justify-between gap-1 pb-1 border-b border-slate-850/80 font-mono text-[9px] font-bold">
         <div className="flex items-center gap-1 shrink-0">
           <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
-          <span className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-200 whitespace-nowrap">
-            Timeline 15'
-          </span>
-          <span className="font-mono text-[8px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1 py-0.5 rounded whitespace-nowrap hidden sm:inline">
+          <span className="text-slate-300 whitespace-nowrap">
             {windowStart}'-{windowEnd}'
           </span>
         </div>
 
-        {/* Resumo Rápido das 5 Métricas */}
-        <div className="flex items-center gap-0.5 sm:gap-1 text-[8px] font-mono font-bold flex-wrap justify-end">
+        {/* Resumo Rápido das 5 Métricas (Apenas números + ícones) */}
+        <div className="flex items-center gap-1 text-[9px] font-mono font-bold flex-wrap justify-end">
           {goalsCount > 0 && (
             <span
-              className="px-1 py-0.5 rounded border bg-rose-500/20 border-rose-500/40 text-rose-300 whitespace-nowrap"
+              className="px-1.5 py-0.5 rounded border bg-rose-500/20 border-rose-500/40 text-rose-300 whitespace-nowrap"
               title="Gols na janela recente"
             >
               ⚽{goalsCount}
@@ -78,7 +75,7 @@ export const MatchTimeline15m: React.FC<MatchTimeline15mProps> = ({
           )}
 
           <span
-            className={`px-1 py-0.5 rounded border whitespace-nowrap ${
+            className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
               sotCount > 0
                 ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                 : 'bg-slate-900 border-slate-800 text-slate-400'
@@ -89,7 +86,7 @@ export const MatchTimeline15m: React.FC<MatchTimeline15mProps> = ({
           </span>
 
           <span
-            className={`px-1 py-0.5 rounded border whitespace-nowrap ${
+            className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
               insideBoxCount > 0
                 ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                 : 'bg-slate-900 border-slate-800 text-slate-400'
@@ -100,10 +97,17 @@ export const MatchTimeline15m: React.FC<MatchTimeline15mProps> = ({
           </span>
 
           <span
-            className="px-1 py-0.5 rounded border bg-emerald-500/15 border-emerald-500/35 text-emerald-400 font-black whitespace-nowrap"
+            className="px-1.5 py-0.5 rounded border bg-slate-900 border-slate-800 text-slate-400 whitespace-nowrap"
+            title="Finalizações para fora"
+          >
+            💨{offTargetCount}
+          </span>
+
+          <span
+            className="px-1.5 py-0.5 rounded border bg-emerald-500/15 border-emerald-500/35 text-emerald-400 font-black whitespace-nowrap"
             title="Soma de xG recente"
           >
-            +{totalXg.toFixed(2)}
+            {totalXg.toFixed(2)}
           </span>
         </div>
       </div>

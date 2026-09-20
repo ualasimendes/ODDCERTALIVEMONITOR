@@ -293,42 +293,38 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onOpenDetailModal }
               )}
             </div>
 
-            {/* TAG DE INTENSIDADE COM DISTINÇÃO PRÉ-GOL VS PÓS-GOL */}
+            {/* TAG DE INTENSIDADE: SE SAIU GOL AVISA PÓS-GOL, SE NÃO SAIU NÃO FAZ NADA EXTRA */}
             {intensity.primaryTag === 'MEGA_HOT' ? (
-              <span
-                className={`inline-flex items-center gap-1 text-[8px] sm:text-[11px] font-black px-1.5 sm:px-2 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap ${
-                  intensity.hasRecentGoal
-                    ? 'bg-rose-950/80 text-rose-300 border border-rose-700/60 shadow-sm'
-                    : 'bg-rose-600 text-white shadow-sm shadow-rose-900/50 animate-pulse'
-                }`}
-                title={
-                  intensity.hasRecentGoal
-                    ? `Mega Hot Pós-Gol: Gol aos ${intensity.recentGoalMinute || '?'}' inflou o xG recente. Jogo pode desacelerar.`
-                    : 'Mega Hot Pré-Gol: Pressão contínua sem gol recente!'
-                }
-              >
-                <Flame className={`w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0 ${intensity.hasRecentGoal ? 'text-rose-400' : 'fill-white'}`} />
-                <span className="hidden sm:inline">{intensity.hasRecentGoal ? 'MEGA (PÓS-GOL)' : 'MEGA HOT'}</span>
-                <span className="sm:hidden">{intensity.hasRecentGoal ? 'PÓS-GOL' : 'MEGA'}</span>
-                {!intensity.hasRecentGoal && <span className="text-[9px]">🎯</span>}
-              </span>
+              <div className="flex items-center gap-1">
+                <span
+                  className="inline-flex items-center gap-0.5 text-[8px] sm:text-[11px] font-black px-1.5 sm:px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-sm shadow-rose-900/50 uppercase tracking-wider animate-pulse whitespace-nowrap"
+                  title="Mega Hot: Pressão de xG recente muito alta"
+                >
+                  <Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-white shrink-0" />
+                  <span className="hidden sm:inline">MEGA HOT</span>
+                  <span className="sm:hidden">MEGA</span>
+                </span>
+                {intensity.hasRecentGoal && (
+                  <span className="inline-flex items-center text-[8px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider whitespace-nowrap" title={`Gol aos ${intensity.recentGoalMinute || '?'}'`}>
+                    PÓS-GOL
+                  </span>
+                )}
+              </div>
             ) : intensity.primaryTag === 'HOT' ? (
-              <span
-                className={`inline-flex items-center gap-1 text-[8px] sm:text-[11px] font-black px-1.5 sm:px-2 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap ${
-                  intensity.hasRecentGoal
-                    ? 'bg-amber-950/80 text-amber-300 border border-amber-700/60 shadow-sm'
-                    : 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-900/40'
-                }`}
-                title={
-                  intensity.hasRecentGoal
-                    ? `Hot Pós-Gol: Gol aos ${intensity.recentGoalMinute || '?'}' no intervalo recente.`
-                    : 'Hot Pré-Gol: Pressão ativa sem gol recente!'
-                }
-              >
-                <Flame className={`w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0 ${intensity.hasRecentGoal ? 'text-amber-400' : 'fill-slate-950'}`} />
-                <span>{intensity.hasRecentGoal ? 'HOT (PÓS-GOL)' : 'HOT'}</span>
-                {!intensity.hasRecentGoal && <span className="text-[9px]">🎯</span>}
-              </span>
+              <div className="flex items-center gap-1">
+                <span
+                  className="inline-flex items-center gap-0.5 text-[8px] sm:text-[11px] font-black px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 shadow-sm shadow-amber-900/40 uppercase tracking-wider whitespace-nowrap"
+                  title="Hot: Pressão recente ativa"
+                >
+                  <Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-slate-950 shrink-0" />
+                  <span>HOT</span>
+                </span>
+                {intensity.hasRecentGoal && (
+                  <span className="inline-flex items-center text-[8px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider whitespace-nowrap" title={`Gol aos ${intensity.recentGoalMinute || '?'}'`}>
+                    PÓS-GOL
+                  </span>
+                )}
+              </div>
             ) : null}
           </div>
         </div>

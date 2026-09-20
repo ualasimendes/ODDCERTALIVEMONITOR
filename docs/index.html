@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OddCerta Live Monitor</title>
+    <meta name="description" content="Monitoramento e análise manual de partidas de futebol ao vivo por janelas de tempo de Over e intensidade recente." />
+    <meta property="og:title" content="OddCerta Live Monitor" />
+    <meta property="og:description" content="Monitoramento e análise manual de partidas de futebol ao vivo por janelas de tempo de Over e intensidade recente." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script type="module" crossorigin src="/assets/index-CJUx49l2.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-WinMyYy2.css">
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div id="root">
+      <div id="file-protocol-warning" style="display:none; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; padding: 48px 24px; text-align: center; background: #020617; min-height: 100vh; box-sizing: border-box;">
+        <div style="max-width: 580px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 32px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);">
+          <div style="display: inline-block; padding: 6px 14px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 9999px; color: #38bdf8; font-size: 13px; font-weight: 600; margin-bottom: 16px;">
+            OddCerta Live Monitor
+          </div>
+          <h2 style="font-size: 22px; margin: 0 0 12px 0; color: #f8fafc; font-weight: 700;">
+            Como abrir este aplicativo corretamente
+          </h2>
+          <p style="font-size: 14px; line-height: 1.6; color: #94a3b8; margin: 0 0 24px 0;">
+            Você abriu o arquivo direto do seu computador (<code style="color: #f43f5e; background: #1e293b; padding: 2px 6px; border-radius: 4px;">file:///</code>). Por ser uma aplicação moderna em React e com servidor Node.js (responsável por puxar as odds e dados da ESPN), o navegador bloqueia a execução direta deste arquivo por regras de segurança (CORS).
+          </p>
+          <div style="background: #020617; border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: left;">
+            <p style="margin: 0 0 12px 0; color: #10b981; font-weight: 600; font-size: 14px;">
+              Passo a passo para abrir:
+            </p>
+            <ol style="margin: 0; padding-left: 20px; line-height: 1.8; color: #cbd5e1; font-size: 13px;">
+              <li>Vá até a pasta do projeto no Windows.</li>
+              <li>Dê dois cliques no arquivo <strong style="color: #38bdf8;">iniciar.bat</strong>.</li>
+              <li>O servidor iniciará e seu navegador abrirá automaticamente em <strong style="color: #38bdf8;">http://localhost:3000</strong>.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      if (window.location.protocol === 'file:') {
+        var el = document.getElementById('file-protocol-warning');
+        if (el) el.style.display = 'block';
+      }
+    </script>
+  </body>
+</html>
+

@@ -17,13 +17,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSettingsUpdated,
 }) => {
   const [competitions, setCompetitions] = useState<CompetitionConfig[]>([]);
-  const [intervalSec, setIntervalSec] = useState<number>(currentSettings.pollIntervalSeconds || 30);
+  const [intervalSec, setIntervalSec] = useState<number>(currentSettings.pollIntervalSeconds || 60);
   const [isSaving, setIsSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
   useEffect(() => {
     if (isOpen) {
-      setIntervalSec(currentSettings.pollIntervalSeconds || 30);
+      setIntervalSec(currentSettings.pollIntervalSeconds || 60);
       fetchCompetitions()
         .then(setCompetitions)
         .catch(console.error);
@@ -62,12 +62,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div
         id="settings-modal"
-        className="bg-slate-900 border border-slate-750 rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-8"
+        className="bg-slate-900 border border-slate-750 rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-8"
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between rounded-t-3xl">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+            <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
               <Sliders className="w-5 h-5" />
             </div>
             <div>
@@ -83,7 +83,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             id="btn-close-settings-modal"
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -109,7 +109,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </p>
 
             <div className="grid grid-cols-4 gap-2">
-              {[30, 15, 10, 5].map(sec => (
+              {[60, 30, 15, 10].map(sec => (
                 <button
                   key={sec}
                   id={`btn-interval-${sec}`}
@@ -121,7 +121,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-white'
                   }`}
                 >
-                  {sec} segundos {sec === 30 ? '(Padrão)' : ''}
+                  {sec} segundos {sec === 60 ? '(Padrão)' : ''}
                 </button>
               ))}
             </div>

@@ -36,8 +36,12 @@ export class EspnProvider implements SoccerDataProvider {
     // Parallel fetch scoreboards for active leagues
     const scoreboardPromises = activeLeagues.map(async (leagueId) => {
       try {
-        const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueId}/scoreboard`;
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const safeLeagueId = encodeURIComponent(leagueId);
+        const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${safeLeagueId}/scoreboard`;
+        const res = await fetch(url, {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(8000),
+        });
         if (!res.ok) return { leagueId, events: [] };
         const data = await res.json();
         const events = data.events || [];
@@ -72,8 +76,13 @@ export class EspnProvider implements SoccerDataProvider {
 
   public async getMatchDetail(matchId: string, leagueId: string, eventBrief?: any): Promise<RawMatchSummary | null> {
     try {
-      const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueId}/summary?event=${matchId}`;
-      const res = await fetch(summaryUrl, { headers: { 'Accept': 'application/json' } });
+      const safeLeagueId = encodeURIComponent(leagueId);
+      const safeMatchId = encodeURIComponent(matchId);
+      const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${safeLeagueId}/summary?event=${safeMatchId}`;
+      const res = await fetch(summaryUrl, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000),
+      });
       if (!res.ok) return null;
       const data = await res.json();
 
@@ -269,45 +278,106 @@ export class EspnProvider implements SoccerDataProvider {
 
       events.sort((a, b) => b.minute - a.minute);
 
-      // Odds extraction (from data.odds or data.pickcenter)
+      // Odds extraction (from data.odds, data.pickcenter, data.header, and eventBrief)
       const oddsList: RawOddItem[] = [];
-      const rawOdds = data.odds || data.pickcenter || [];
+      const rawOdds = [
+        ...(Array.isArray(data.odds) ? data.odds : []),
+        ...(Array.isArray(data.pickcenter) ? data.pickcenter : []),
+        ...(Array.isArray(data.header?.competitions?.[0]?.odds) ? data.header.competitions[0].odds : []),
+        ...(Array.isArray(eventBrief?.competitions?.[0]?.odds) ? eventBrief.competitions[0].odds : []),
+      ];
+
+      const seenOddKeys = new Set<string>();
 
       if (Array.isArray(rawOdds)) {
         for (const o of rawOdds) {
-          const providerName = o.provider?.name || 'Mercado';
+          if (!o || typeof o !== 'object') continue;
+          const providerName = o.provider?.name || 'DraftKings';
           const isLive = providerName.toLowerCase().includes('live');
+
+          // 1. Check current object (often has decimal directly: o.current.over.decimal or value)
+          if (o.current?.over) {
+            const curLine = parseFloat(o.current.total?.alternateDisplayValue || o.current.total?.american || o.overUnder);
+            const curDec = typeof o.current.over.decimal === 'number'
+              ? o.current.over.decimal
+              : typeof o.current.over.value === 'number'
+              ? o.current.over.value
+              : this.americanToDecimal(o.current.over.american || o.current.over.odds);
+            if (!isNaN(curLine) && curDec !== null && curDec > 1.01) {
+              const key = `${providerName}:${curLine}:${curDec.toFixed(2)}`;
+              if (!seenOddKeys.has(key)) {
+                seenOddKeys.add(key);
+                oddsList.push({
+                  providerName: isLive ? providerName : `${providerName} (Ao Vivo)`,
+                  market: 'over_under',
+                  line: curLine,
+                  overOddsDecimal: parseFloat(curDec.toFixed(2)),
+                  underOddsDecimal: null,
+                  isLive: true,
+                });
+              }
+            }
+          }
+
+          // 2. Check total.over.current
+          if (o.total?.over?.current) {
+            const liveLine = parseFloat(String(o.total.over.current.line || '').replace(/[^0-9.]/g, ''));
+            const liveDec = this.americanToDecimal(o.total.over.current.odds);
+            if (!isNaN(liveLine) && liveDec !== null && liveDec > 1.01) {
+              const key = `${providerName}:${liveLine}:${liveDec.toFixed(2)}`;
+              if (!seenOddKeys.has(key)) {
+                seenOddKeys.add(key);
+                oddsList.push({
+                  providerName: `${providerName} (Ao Vivo)`,
+                  market: 'over_under',
+                  line: liveLine,
+                  overOddsDecimal: liveDec,
+                  underOddsDecimal: null,
+                  isLive: true,
+                });
+              }
+            }
+          }
+
+          // 3. Check total.over.close
+          if (o.total?.over?.close) {
+            const closeLine = parseFloat(String(o.total.over.close.line || '').replace(/[^0-9.]/g, ''));
+            const closeDec = this.americanToDecimal(o.total.over.close.odds);
+            if (!isNaN(closeLine) && closeDec !== null && closeDec > 1.01) {
+              const key = `${providerName}:${closeLine}:${closeDec.toFixed(2)}`;
+              if (!seenOddKeys.has(key)) {
+                seenOddKeys.add(key);
+                oddsList.push({
+                  providerName,
+                  market: 'over_under',
+                  line: closeLine,
+                  overOddsDecimal: closeDec,
+                  underOddsDecimal: null,
+                  isLive,
+                });
+              }
+            }
+          }
+
+          // 4. Standard overUnder & overOdds
           const line = typeof o.overUnder === 'number' ? o.overUnder : parseFloat(o.overUnder);
-          
           if (!isNaN(line)) {
-            // Convert American odds to decimal
             const overOddsDecimal = this.americanToDecimal(o.overOdds);
             const underOddsDecimal = this.americanToDecimal(o.underOdds);
 
-            oddsList.push({
-              providerName,
-              market: 'over_under',
-              line,
-              overOddsDecimal,
-              underOddsDecimal,
-              isLive,
-            });
-          }
-
-          // Check nested total live line
-          if (o.total?.over?.live) {
-            const liveTotal = o.total.over.live;
-            const liveLine = parseFloat(String(liveTotal.line).replace(/[^0-9.]/g, ''));
-            const liveOddsDec = this.americanToDecimal(liveTotal.odds);
-            if (!isNaN(liveLine) && liveOddsDec !== null) {
-              oddsList.push({
-                providerName: `${providerName} (Ao Vivo)`,
-                market: 'over_under',
-                line: liveLine,
-                overOddsDecimal: liveOddsDec,
-                underOddsDecimal: null,
-                isLive: true,
-              });
+            if (overOddsDecimal !== null && overOddsDecimal > 1.01) {
+              const key = `${providerName}:${line}:${overOddsDecimal.toFixed(2)}`;
+              if (!seenOddKeys.has(key)) {
+                seenOddKeys.add(key);
+                oddsList.push({
+                  providerName,
+                  market: 'over_under',
+                  line,
+                  overOddsDecimal,
+                  underOddsDecimal,
+                  isLive,
+                });
+              }
             }
           }
         }

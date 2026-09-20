@@ -1,4 +1,4 @@
-export type TabType = 'over_limite' | 'over_frente' | 'over_longa';
+export type TabType = 'all' | 'over_limite' | 'over_frente' | 'over_longa';
 export type IntensityLevel = 'MEGA_HOT' | 'HOT' | 'NORMAL';
 
 export type SortField =
@@ -107,6 +107,8 @@ export interface IntensityBreakdown {
   xg5: number | null;
   tag5: IntensityLevel;
   primaryTag: IntensityLevel;
+  historicalOverRate?: number | null;
+  confluenceReason?: string;
 }
 
 export interface OverMarketTarget {
@@ -160,6 +162,7 @@ export interface LineRateItem {
 export interface TeamAuditMatchItem {
   matchId: string;
   date: string;
+  rawDate?: string;
   isHome: boolean;
   opponentName: string;
   teamScore: number;
@@ -256,4 +259,82 @@ export interface SystemSettings {
   overLongaRefOdd: number;
   lastPollTimestamp: string | null;
   activeProvider: string;
+}
+
+export type ActiveScreenMode = 'live_monitor' | 'suggestions';
+
+export type SuggestionType = 'UNILATERAL_HOME' | 'UNILATERAL_AWAY' | 'OVER_OPEN_GAME';
+export type SuggestionStatus = 'PENDENTE' | 'GREEN' | 'RED';
+
+export interface LiveSuggestionItem {
+  id: string;
+  gameId: string;
+  competitionName: string;
+  homeTeam: TeamInfo;
+  awayTeam: TeamInfo;
+  minute: number;
+  scoreAtTime: {
+    home: number;
+    away: number;
+  };
+  currentScore: {
+    home: number;
+    away: number;
+  };
+  type: SuggestionType;
+  typeLabel: string;
+  dominantTeam?: 'home' | 'away';
+  dominantTeamName?: string;
+  targetLine?: number;
+  odd?: number | null;
+  marketDescription: string;
+  suggestionText: string;
+  triggerReason?: string;
+  xgDiff?: number;
+  status: SuggestionStatus;
+  resultNote?: string;
+  resolvedAtMinute?: number;
+  createdAt: string;
+  resolvedAt?: string;
+  metrics: {
+    homeXg15: number | null;
+    awayXg15: number | null;
+    homeXg10: number | null;
+    awayXg10: number | null;
+    homeXg5: number | null;
+    awayXg5: number | null;
+    totalXg: number | null;
+    recentShotsHome?: number | null;
+    recentShotsAway?: number | null;
+    recentSotHome?: number | null;
+    recentSotAway?: number | null;
+  };
+}
+
+export interface SuggestionsSummary {
+  total: number;
+  greens: number;
+  reds: number;
+  pending: number;
+  accuracyRate: number;
+}
+
+export interface SuggestionCriteriaConfig {
+  // Padrão 1: Pressão Unilateral
+  unilateralMinXgDiff: number; // Ex: 0.20 (XG A - XG B >= 0.20)
+  unilateralMinDominantXg: number;
+  unilateralMaxOpponentXg: number; // Ex: 0.00 (XG B = 0)
+  unilateralDominanceRatio: number;
+  unilateralMinDominantShots: number;
+  unilateralMinDominantSot: number;
+
+  // Padrão 2: Jogo Aberto (Lá e Cá)
+  openGameMinMutualXg: number;
+  openGameMinCombinedXg: number;
+  openGameMinCombinedShots: number;
+
+  // Filtros Globais da Partida
+  minMinute: number;
+  maxMinute: number;
+  minOddValue: number;
 }

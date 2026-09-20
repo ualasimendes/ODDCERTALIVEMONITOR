@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { newDb } from 'pg-mem';
-import { CompetitionConfig, GameSnapshot, LiveMatchData, TeamInfo } from '../models/types.ts';
+import { CompetitionConfig, GameSnapshot, LiveMatchData, LiveSuggestionItem, TeamInfo } from '../models/types.ts';
 
 function formatSql(sql: string, params?: any[]): string {
   if (!params || params.length === 0) return sql;
@@ -13,7 +13,9 @@ function formatSql(sql: string, params?: any[]): string {
     if (typeof val === 'number') return Number.isFinite(val) ? val.toString() : 'NULL';
     if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
     if (val instanceof Date) return `'${val.toISOString()}'`;
-    return `'${String(val).replace(/'/g, "''")}'`;
+    // Prevent null-byte injection and escape SQL quotes
+    const sanitized = String(val).replace(/\0/g, '').replace(/'/g, "''");
+    return `'${sanitized}'`;
   });
 }
 
@@ -112,6 +114,42 @@ class DatabaseService {
               xg_15 REAL,
               xg_10 REAL,
               xg_5 REAL
+          );
+          CREATE TABLE IF NOT EXISTS suggestions (
+              id VARCHAR(100) PRIMARY KEY,
+              game_id VARCHAR(50) NOT NULL,
+              competition_name VARCHAR(100),
+              home_team_id VARCHAR(50),
+              home_team_name VARCHAR(100),
+              home_team_logo TEXT,
+              away_team_id VARCHAR(50),
+              away_team_name VARCHAR(100),
+              away_team_logo TEXT,
+              created_at TIMESTAMP NOT NULL,
+              minute INT NOT NULL,
+              score_home_at_time INT NOT NULL,
+              score_away_at_time INT NOT NULL,
+              current_score_home INT NOT NULL,
+              current_score_away INT NOT NULL,
+              type VARCHAR(50) NOT NULL,
+              type_label VARCHAR(50) NOT NULL,
+              dominant_team VARCHAR(10),
+              dominant_team_name VARCHAR(100),
+              target_line REAL,
+              odd REAL,
+              market_description VARCHAR(100),
+              suggestion_text TEXT NOT NULL,
+              status VARCHAR(20) NOT NULL,
+              result_note TEXT,
+              resolved_at_minute INT,
+              resolved_at TIMESTAMP,
+              home_xg_15 REAL,
+              away_xg_15 REAL,
+              home_xg_10 REAL,
+              away_xg_10 REAL,
+              home_xg_5 REAL,
+              away_xg_5 REAL,
+              total_xg REAL
           );
         `;
       }
@@ -331,6 +369,158 @@ class DatabaseService {
       );
     } catch (err: any) {
       console.error('[PostgreSQL Engine] Error recording signal:', err?.message || err);
+    }
+  }
+
+  public saveSuggestion(sug: LiveSuggestionItem) {
+    try {
+      this.none(
+        `INSERT INTO suggestions (
+          id, game_id, competition_name, home_team_id, home_team_name, home_team_logo,
+          away_team_id, away_team_name, away_team_logo, created_at, minute,
+          score_home_at_time, score_away_at_time, current_score_home, current_score_away,
+          type, type_label, dominant_team, dominant_team_name, target_line, odd,
+          market_description, suggestion_text, trigger_reason, xg_diff, status, result_note, resolved_at_minute, resolved_at,
+          home_xg_15, away_xg_15, home_xg_10, away_xg_10, home_xg_5, away_xg_5, total_xg
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36
+        ) ON CONFLICT (id) DO UPDATE SET
+          current_score_home = EXCLUDED.current_score_home,
+          current_score_away = EXCLUDED.current_score_away,
+          status = EXCLUDED.status,
+          result_note = EXCLUDED.result_note,
+          resolved_at_minute = EXCLUDED.resolved_at_minute,
+          resolved_at = EXCLUDED.resolved_at`,
+        [
+          sug.id,
+          sug.gameId,
+          sug.competitionName,
+          sug.homeTeam.id,
+          sug.homeTeam.name,
+          sug.homeTeam.logoUrl || null,
+          sug.awayTeam.id,
+          sug.awayTeam.name,
+          sug.awayTeam.logoUrl || null,
+          new Date(sug.createdAt),
+          sug.minute,
+          sug.scoreAtTime.home,
+          sug.scoreAtTime.away,
+          sug.currentScore.home,
+          sug.currentScore.away,
+          sug.type,
+          sug.typeLabel,
+          sug.dominantTeam || null,
+          sug.dominantTeamName || null,
+          sug.targetLine || null,
+          sug.odd || null,
+          sug.marketDescription,
+          sug.suggestionText,
+          sug.triggerReason || null,
+          sug.xgDiff ?? null,
+          sug.status,
+          sug.resultNote || null,
+          sug.resolvedAtMinute || null,
+          sug.resolvedAt ? new Date(sug.resolvedAt) : null,
+          sug.metrics.homeXg15,
+          sug.metrics.awayXg15,
+          sug.metrics.homeXg10,
+          sug.metrics.awayXg10,
+          sug.metrics.homeXg5,
+          sug.metrics.awayXg5,
+          sug.metrics.totalXg,
+        ]
+      );
+    } catch (err: any) {
+      console.error('[PostgreSQL Engine] Error saving suggestion:', err?.message || err);
+    }
+  }
+
+  public updateSuggestion(sug: LiveSuggestionItem) {
+    try {
+      this.none(
+        `UPDATE suggestions SET
+          current_score_home = $1,
+          current_score_away = $2,
+          status = $3,
+          result_note = $4,
+          resolved_at_minute = $5,
+          resolved_at = $6
+         WHERE id = $7`,
+        [
+          sug.currentScore.home,
+          sug.currentScore.away,
+          sug.status,
+          sug.resultNote || null,
+          sug.resolvedAtMinute || null,
+          sug.resolvedAt ? new Date(sug.resolvedAt) : null,
+          sug.id,
+        ]
+      );
+    } catch (err: any) {
+      console.error('[PostgreSQL Engine] Error updating suggestion:', err?.message || err);
+    }
+  }
+
+  public getAllSuggestions(): LiveSuggestionItem[] {
+    try {
+      const rows = this.many(
+        `SELECT * FROM suggestions ORDER BY created_at DESC LIMIT 150`
+      );
+      return rows.map((r: any) => ({
+        id: r.id,
+        gameId: r.game_id,
+        competitionName: r.competition_name,
+        homeTeam: {
+          id: r.home_team_id,
+          name: r.home_team_name,
+          shortName: r.home_team_name,
+          abbreviation: r.home_team_name?.slice(0, 3)?.toUpperCase() || 'HOM',
+          logoUrl: r.home_team_logo,
+        },
+        awayTeam: {
+          id: r.away_team_id,
+          name: r.away_team_name,
+          shortName: r.away_team_name,
+          abbreviation: r.away_team_name?.slice(0, 3)?.toUpperCase() || 'AWY',
+          logoUrl: r.away_team_logo,
+        },
+        minute: r.minute,
+        scoreAtTime: {
+          home: r.score_home_at_time,
+          away: r.score_away_at_time,
+        },
+        currentScore: {
+          home: r.current_score_home,
+          away: r.current_score_away,
+        },
+        type: r.type,
+        typeLabel: r.type_label,
+        dominantTeam: r.dominant_team,
+        dominantTeamName: r.dominant_team_name,
+        targetLine: r.target_line,
+        odd: r.odd,
+        marketDescription: r.market_description,
+        suggestionText: r.suggestion_text,
+        triggerReason: r.trigger_reason,
+        xgDiff: r.xg_diff,
+        status: r.status,
+        resultNote: r.result_note,
+        resolvedAtMinute: r.resolved_at_minute,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+        resolvedAt: r.resolved_at ? new Date(r.resolved_at).toISOString() : undefined,
+        metrics: {
+          homeXg15: r.home_xg_15,
+          awayXg15: r.away_xg_15,
+          homeXg10: r.home_xg_10,
+          awayXg10: r.away_xg_10,
+          homeXg5: r.home_xg_5,
+          awayXg5: r.away_xg_5,
+          totalXg: r.total_xg,
+        },
+      }));
+    } catch (err: any) {
+      console.error('[PostgreSQL Engine] Error fetching suggestions:', err?.message || err);
+      return [];
     }
   }
 }

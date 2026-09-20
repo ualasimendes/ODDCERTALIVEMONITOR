@@ -157,6 +157,13 @@ export class HistoryService {
       });
     }
 
+    // Sort descending by date (newest finished matches first)
+    results.sort((a, b) => {
+      const timeA = a.date ? new Date(a.date).getTime() : 0;
+      const timeB = b.date ? new Date(b.date).getTime() : 0;
+      return timeB - timeA;
+    });
+
     return results;
   }
 
@@ -215,6 +222,7 @@ export class HistoryService {
       date: m.date
         ? new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
         : 'N/D',
+      rawDate: m.date,
       isHome: m.isHome,
       opponentName: m.opponentName,
       teamScore: m.teamScore,

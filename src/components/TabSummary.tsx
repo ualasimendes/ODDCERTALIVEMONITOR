@@ -24,6 +24,7 @@ export const TabSummary: React.FC<TabSummaryProps> = ({
   onClearFilters,
 }) => {
   const tabTitles: Record<TabType, string> = {
+    all: 'TODOS OS JOGOS',
     over_limite: 'LIMITE',
     over_frente: 'A FRENTE',
     over_longa: 'EXPOSIÇÃO',
@@ -35,7 +36,7 @@ export const TabSummary: React.FC<TabSummaryProps> = ({
     <section
       id="tab-summary-panel"
       aria-label="Resumo da Janela"
-      className="bg-slate-900/95 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs"
+      className="bg-slate-900/95 border border-slate-800 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm"
     >
       {/* Left: Tab Title & Counts */}
       <div className="flex flex-wrap items-center gap-3 sm:gap-4">
@@ -64,12 +65,12 @@ export const TabSummary: React.FC<TabSummaryProps> = ({
 
         {/* Hot & Mega Hot Counters */}
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono text-[11px] whitespace-nowrap">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono text-[11px] whitespace-nowrap">
             <Flame className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
             Hot: <strong className="font-bold">{hotCount}</strong>
           </span>
 
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-300 border border-rose-500/30 font-mono text-[11px] whitespace-nowrap">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 font-mono text-[11px] whitespace-nowrap">
             <Flame className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
             Mega Hot: <strong className="font-bold">{megaHotCount}</strong>
           </span>

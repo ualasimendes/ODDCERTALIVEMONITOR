@@ -1,11 +1,12 @@
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
-import { LiveMatchData } from '../types.ts';
+import { LiveMatchData, TabType } from '../types.ts';
 import { MatchCard } from './MatchCard.tsx';
 
 interface CompetitionGroupProps {
   competitionName: string;
   matches: LiveMatchData[];
+  currentTab?: TabType;
   onOpenDetailModal: (match: LiveMatchData) => void;
 }
 
@@ -50,6 +51,7 @@ export function getLeagueEmoji(leagueName: string): string {
 export const CompetitionGroup: React.FC<CompetitionGroupProps> = ({
   competitionName,
   matches,
+  currentTab,
   onOpenDetailModal,
 }) => {
   const emoji = getLeagueEmoji(competitionName);
@@ -79,6 +81,7 @@ export const CompetitionGroup: React.FC<CompetitionGroupProps> = ({
             <MatchCard
               key={match.id}
               match={match}
+              currentTab={currentTab}
               onOpenDetailModal={onOpenDetailModal}
             />
           ))}

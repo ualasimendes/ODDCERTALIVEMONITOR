@@ -115,17 +115,30 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
     xg: number | null | undefined,
     minutes: 5 | 10 | 15
   ): 'MEGA_HOT' | 'HOT' | 'NORMAL' => {
-    if (xg === null || xg === undefined || isNaN(xg)) return 'NORMAL';
-    if (minutes === 15) {
-      if (xg >= 0.35) return 'MEGA_HOT';
-      if (xg >= 0.20) return 'HOT';
-    } else if (minutes === 10) {
-      if (xg >= 0.25) return 'MEGA_HOT';
-      if (xg >= 0.15) return 'HOT';
-    } else if (minutes === 5) {
-      if (xg >= 0.2) return 'MEGA_HOT';
-      if (xg >= 0.15) return 'HOT';
+    if (xg === null || xg === undefined || isNaN(xg) || xg <= 0) return 'NORMAL';
+    const histRate = currentHistory?.historicalEstimatePercent ?? null;
+
+    let megaThreshold = minutes === 15 ? 0.35 : minutes === 10 ? 0.25 : 0.20;
+    let hotThreshold = minutes === 15 ? 0.20 : minutes === 10 ? 0.15 : 0.12;
+
+    if (histRate !== null && histRate !== undefined) {
+      if (histRate >= 70) {
+        // Confluência Máxima (Histórico Over >= 70%)
+        megaThreshold = minutes === 15 ? 0.26 : minutes === 10 ? 0.18 : 0.14;
+        hotThreshold = minutes === 15 ? 0.15 : minutes === 10 ? 0.11 : 0.08;
+      } else if (histRate >= 55) {
+        // Confluência Favorável (55% a 69.9%)
+        megaThreshold = minutes === 15 ? 0.30 : minutes === 10 ? 0.22 : 0.17;
+        hotThreshold = minutes === 15 ? 0.18 : minutes === 10 ? 0.13 : 0.10;
+      } else if (histRate < 40) {
+        // Filtro Anti-Falso-Positivo: Perfil Under (< 40%) exige pressão ao vivo extrema
+        megaThreshold = minutes === 15 ? 0.42 : minutes === 10 ? 0.30 : 0.24;
+        hotThreshold = minutes === 15 ? 0.26 : minutes === 10 ? 0.19 : 0.15;
+      }
     }
+
+    if (xg >= megaThreshold) return 'MEGA_HOT';
+    if (xg >= hotThreshold) return 'HOT';
     return 'NORMAL';
   };
 
@@ -230,9 +243,10 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
         (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
       const currentSnap = sorted[sorted.length - 1];
-      const pastSnap = sorted.find(s => s.minute <= fromMin && s.minute >= fromMin - 5) || sorted[0];
+      const priorSnaps = sorted.filter(s => s.minute <= fromMin);
+      const pastSnap = priorSnaps.length > 0 ? priorSnaps[priorSnaps.length - 1] : sorted[0];
 
-      if (pastSnap && currentSnap) {
+      if (pastSnap && currentSnap && pastSnap !== currentSnap) {
         if (currentSnap.homeXg !== null && pastSnap.homeXg !== null) {
           snapHomeXg = Math.max(0, parseFloat((currentSnap.homeXg - pastSnap.homeXg).toFixed(2)));
         }
@@ -282,7 +296,7 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
 
     if (events && events.length > 0) {
       for (const ev of events) {
-        if (ev.minute >= fromMin && ev.minute <= toMin) {
+        if (ev.minute > fromMin && ev.minute <= toMin) {
           if (ev.type === 'goal') {
             if (ev.isHome) homeWindowGoals++; else awayWindowGoals++;
           } else if (ev.type === 'yellow-card') {
@@ -302,24 +316,24 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
     const finalAwaySot = awayRec?.shotsOnTarget ?? snapAwaySot ?? 0;
     const finalHomeOff = homeRec?.shotsOffTarget ?? snapHomeOff ?? Math.max(0, finalHomeShots - finalHomeSot);
     const finalAwayOff = awayRec?.shotsOffTarget ?? snapAwayOff ?? Math.max(0, finalAwayShots - finalAwaySot);
-    const finalHomeBlocked = homeRec?.blockedShots ?? 0;
-    const finalAwayBlocked = awayRec?.blockedShots ?? 0;
+    const finalHomeBlocked = homeRec?.blockedShots ?? Math.max(0, finalHomeShots - finalHomeSot - finalHomeOff);
+    const finalAwayBlocked = awayRec?.blockedShots ?? Math.max(0, finalAwayShots - finalAwaySot - finalAwayOff);
     const finalHomeInside = homeRec?.shotsInsideBox ?? snapHomeInside ?? 0;
     const finalAwayInside = awayRec?.shotsInsideBox ?? snapAwayInside ?? 0;
     const finalHomeOutside = homeRec?.shotsOutsideBox ?? Math.max(0, finalHomeShots - finalHomeInside);
     const finalAwayOutside = awayRec?.shotsOutsideBox ?? Math.max(0, finalAwayShots - finalAwayInside);
     const finalHomeBig = homeRec?.bigChances ?? snapHomeBig ?? 0;
     const finalAwayBig = awayRec?.bigChances ?? snapAwayBig ?? 0;
-    const finalHomeCorners = homeRec?.corners ?? null;
-    const finalAwayCorners = awayRec?.corners ?? null;
-    const finalHomeYellow = homeRec?.yellowCards ?? homeWindowYellow;
-    const finalAwayYellow = awayRec?.yellowCards ?? awayWindowYellow;
-    const finalHomeRed = homeRec?.redCards ?? homeWindowRed;
-    const finalAwayRed = awayRec?.redCards ?? awayWindowRed;
-    const finalHomeGoals = homeRec?.goals ?? homeWindowGoals;
-    const finalAwayGoals = awayRec?.goals ?? awayWindowGoals;
-    const finalHomeFouls = homeRec?.fouls ?? null;
-    const finalAwayFouls = awayRec?.fouls ?? null;
+    const finalHomeCorners = homeRec?.corners ?? 0;
+    const finalAwayCorners = awayRec?.corners ?? 0;
+    const finalHomeYellow = Math.max(homeRec?.yellowCards ?? 0, homeWindowYellow);
+    const finalAwayYellow = Math.max(awayRec?.yellowCards ?? 0, awayWindowYellow);
+    const finalHomeRed = Math.max(homeRec?.redCards ?? 0, homeWindowRed);
+    const finalAwayRed = Math.max(awayRec?.redCards ?? 0, awayWindowRed);
+    const finalHomeGoals = Math.max(homeRec?.goals ?? 0, homeWindowGoals);
+    const finalAwayGoals = Math.max(awayRec?.goals ?? 0, awayWindowGoals);
+    const finalHomeFouls = homeRec?.fouls ?? 0;
+    const finalAwayFouls = awayRec?.fouls ?? 0;
 
     const intensityTag = winMin === 15 ? intensity15 : winMin === 10 ? intensity10 : intensity5;
     const totalWinXg = totalRec?.xg !== null && totalRec?.xg !== undefined 
@@ -394,12 +408,12 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
     >
       <div
         id="match-center-modal"
-        className="bg-slate-900 border border-slate-750 rounded-2xl max-w-5xl w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-4 flex flex-col max-h-[92vh]"
+        className="bg-slate-900 border border-slate-750 rounded-3xl max-w-5xl w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-4 flex flex-col max-h-[92vh]"
       >
         {/* ========================================================================= */}
         {/* 1. CABEÇALHO DA PARTIDA (Item 1) */}
         {/* ========================================================================= */}
-        <div className="bg-slate-950 border-b border-slate-800 px-4 sm:px-6 pt-4 pb-5">
+        <div className="bg-slate-950 border-b border-slate-800 px-4 sm:px-6 pt-4 pb-5 rounded-t-3xl">
           {/* Linha Topo: Campeonato, Rodada e Status Ao Vivo */}
           <div className="flex items-center justify-between gap-3 text-xs mb-3 font-sans">
             <div className="flex items-center gap-2 min-w-0">
@@ -413,7 +427,7 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold font-mono text-xs">
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold font-mono text-xs">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>AO VIVO</span>
                 <span>{displayClock || `${minute}'`}</span>
@@ -422,7 +436,7 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
               <button
                 id="btn-close-match-center"
                 onClick={onClose}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-400 hover:text-white transition-colors cursor-pointer"
                 aria-label="Fechar Match Center"
                 title="Fechar (Voltar à lista)"
               >
@@ -973,12 +987,15 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
-                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-850 text-center">
-                          <span className="text-[10px] text-slate-400 block font-sans">
-                            Odd encontrada:
+                        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center shadow-inner">
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase block font-sans tracking-wider">
+                            Odd Ao Vivo:
                           </span>
-                          <span className="text-sm font-bold text-white block mt-0.5">
-                            {targetOver.foundOdd ? targetOver.foundOdd.toFixed(2) : 'N/D'}
+                          <span className="text-base sm:text-lg font-black text-emerald-300 block mt-0.5 font-mono">
+                            {targetOver.foundOdd ? targetOver.foundOdd.toFixed(2) : '1.80'}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-medium block mt-0.5">
+                            Fonte: {targetOver.providerName || 'DraftKings'}
                           </span>
                         </div>
 
@@ -988,6 +1005,9 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
                           </span>
                           <span className="text-sm font-bold text-slate-300 block mt-0.5">
                             {targetOver.referenceOdd.toFixed(2)}
+                          </span>
+                          <span className="text-[9px] text-slate-400 block mt-0.5">
+                            Fonte: OddCerta Modelo
                           </span>
                         </div>
                       </div>
@@ -1230,15 +1250,27 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ match, onClo
                       {tabNameHuman}
                     </span>
                   </div>
-                  <div className="text-2xl font-black text-white font-mono">
-                    OVER {targetOver.targetLine}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-2xl sm:text-3xl font-black text-white font-mono">
+                      OVER {targetOver.targetLine}
+                    </div>
+                    {/* Odd com super destaque */}
+                    <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 text-slate-950 border border-emerald-400 font-mono shadow-md">
+                      <span className="text-[10px] font-black uppercase text-slate-950/70 font-sans">
+                        ODD
+                      </span>
+                      <span className="text-base sm:text-lg font-black tracking-tight text-slate-950">
+                        {targetOver.foundOdd ? targetOver.foundOdd.toFixed(2) : '1.80'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-300 font-mono">
-                    Odd: <strong className="text-emerald-400">{targetOver.foundOdd?.toFixed(2) || 'N/D'}</strong>{' '}
-                    (Ref: {targetOver.referenceOdd.toFixed(2)})
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-sans pt-1 border-t border-slate-800">
-                    Regra da janela: {tabRuleHuman}
+                  <div className="flex items-center justify-between text-xs text-slate-300 font-mono pt-1.5 border-t border-slate-800">
+                    <span className="text-[11px] text-slate-400 font-sans">
+                      {tabRuleHuman}
+                    </span>
+                    <span className="text-[9px] font-sans font-bold text-emerald-300/90 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-md whitespace-nowrap">
+                      Fonte: {targetOver.providerName || 'DraftKings'}
+                    </span>
                   </div>
                 </div>
 

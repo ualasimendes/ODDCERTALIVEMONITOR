@@ -112,3 +112,46 @@ CREATE TABLE IF NOT EXISTS signals (
 );
 
 CREATE INDEX IF NOT EXISTS idx_signals_game_tab ON signals(game_id, tab_type, timestamp DESC);
+
+-- 8. Entry Suggestions (Automated trading suggestions and audit tracking)
+CREATE TABLE IF NOT EXISTS suggestions (
+    id VARCHAR(100) PRIMARY KEY,
+    game_id VARCHAR(50) NOT NULL,
+    competition_name VARCHAR(100),
+    home_team_id VARCHAR(50),
+    home_team_name VARCHAR(100),
+    home_team_logo TEXT,
+    away_team_id VARCHAR(50),
+    away_team_name VARCHAR(100),
+    away_team_logo TEXT,
+    created_at TIMESTAMP NOT NULL,
+    minute INT NOT NULL,
+    score_home_at_time INT NOT NULL,
+    score_away_at_time INT NOT NULL,
+    current_score_home INT NOT NULL,
+    current_score_away INT NOT NULL,
+    type VARCHAR(50) NOT NULL, -- 'UNILATERAL_HOME', 'UNILATERAL_AWAY', 'OVER_OPEN_GAME'
+    type_label VARCHAR(50) NOT NULL,
+    dominant_team VARCHAR(10),
+    dominant_team_name VARCHAR(100),
+    target_line REAL,
+    odd REAL,
+    market_description VARCHAR(100),
+    suggestion_text TEXT NOT NULL,
+    trigger_reason TEXT,
+    xg_diff REAL,
+    status VARCHAR(20) NOT NULL, -- 'PENDENTE', 'GREEN', 'RED'
+    result_note TEXT,
+    resolved_at_minute INT,
+    resolved_at TIMESTAMP,
+    home_xg_15 REAL,
+    away_xg_15 REAL,
+    home_xg_10 REAL,
+    away_xg_10 REAL,
+    home_xg_5 REAL,
+    away_xg_5 REAL,
+    total_xg REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_suggestions_status ON suggestions(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_suggestions_game ON suggestions(game_id);

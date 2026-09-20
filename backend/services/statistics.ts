@@ -144,8 +144,36 @@ export class StatisticsService {
   ): { home: TeamRecentStats; away: TeamRecentStats } {
     if (raw.state === 'pre' || raw.minute <= 0) {
       return {
-        home: { xg: null, totalShots: null, shotsOnTarget: null, shotsOffTarget: null, shotsInsideBox: null, bigChances: null },
-        away: { xg: null, totalShots: null, shotsOnTarget: null, shotsOffTarget: null, shotsInsideBox: null, bigChances: null },
+        home: {
+          xg: null,
+          totalShots: null,
+          shotsOnTarget: null,
+          shotsOffTarget: null,
+          shotsInsideBox: null,
+          shotsOutsideBox: null,
+          blockedShots: null,
+          bigChances: null,
+          corners: null,
+          yellowCards: null,
+          redCards: null,
+          goals: null,
+          fouls: null,
+        },
+        away: {
+          xg: null,
+          totalShots: null,
+          shotsOnTarget: null,
+          shotsOffTarget: null,
+          shotsInsideBox: null,
+          shotsOutsideBox: null,
+          blockedShots: null,
+          bigChances: null,
+          corners: null,
+          yellowCards: null,
+          redCards: null,
+          goals: null,
+          fouls: null,
+        },
       };
     }
 
@@ -168,9 +196,10 @@ export class StatisticsService {
     if (snapshots.length >= 2) {
       const sorted = [...snapshots].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const currentSnap = sorted[sorted.length - 1];
-      const pastSnap = sorted.find(s => s.minute <= minMinute && s.minute >= minMinute - 4);
+      const priorSnaps = sorted.filter(s => s.minute <= minMinute);
+      const pastSnap = priorSnaps.length > 0 ? priorSnaps[priorSnaps.length - 1] : sorted[0];
 
-      if (pastSnap && currentSnap) {
+      if (pastSnap && currentSnap && pastSnap !== currentSnap) {
         if (pastSnap.homeXg !== null && currentSnap.homeXg !== null) {
           homeXgDelta = Math.max(0, parseFloat((currentSnap.homeXg - pastSnap.homeXg).toFixed(2)));
         }
@@ -231,13 +260,12 @@ export class StatisticsService {
     let awayRed = 0;
     let homeGoals = 0;
     let awayGoals = 0;
-    let foundHome = false;
-    let foundAway = false;
+    let hasCommentary = false;
 
     // Check events for goals and cards in window
     if (raw.events && raw.events.length > 0) {
       for (const evt of raw.events) {
-        if (evt.minute >= minMinute && evt.minute <= currentMinute) {
+        if (evt.minute > minMinute && evt.minute <= currentMinute) {
           if (evt.type === 'goal') {
             if (evt.isHome) homeGoals++; else awayGoals++;
           } else if (evt.type === 'yellow-card') {
@@ -250,6 +278,7 @@ export class StatisticsService {
     }
 
     if (raw.commentaryPlays && raw.commentaryPlays.length > 0) {
+      hasCommentary = true;
       const homeKeywords = [
         raw.homeTeam.name.toLowerCase(),
         raw.homeTeam.shortName.toLowerCase(),
@@ -263,7 +292,7 @@ export class StatisticsService {
       ].filter(Boolean);
 
       for (const p of raw.commentaryPlays) {
-        if (p.minute >= minMinute && p.minute <= currentMinute) {
+        if (p.minute > minMinute && p.minute <= currentMinute) {
           const text = p.text.toLowerCase();
           const isHome = homeKeywords.some(k => text.includes(k));
           const isAway = awayKeywords.some(k => text.includes(k));
@@ -276,14 +305,12 @@ export class StatisticsService {
             const isBig = text.includes('big chance') || text.includes('open goal') || text.includes('goal!');
 
             if (isHome) {
-              foundHome = true;
               homeShots++;
               if (isSot) homeSot++;
               if (isOff) homeOffTarget++;
               if (isInside) homeInsideBox++;
               if (isBig) homeBigChances++;
             } else if (isAway) {
-              foundAway = true;
               awayShots++;
               if (isSot) awaySot++;
               if (isOff) awayOffTarget++;
@@ -305,16 +332,17 @@ export class StatisticsService {
       }
     }
 
-    const finalHomeShots = foundHome ? homeShots : (snapHomeShots !== null ? snapHomeShots : null);
-    const finalAwayShots = foundAway ? awayShots : (snapAwayShots !== null ? snapAwayShots : null);
-    const finalHomeSot = foundHome ? homeSot : (snapHomeSot !== null ? snapHomeSot : null);
-    const finalAwaySot = foundAway ? awaySot : (snapAwaySot !== null ? snapAwaySot : null);
-    const finalHomeOff = foundHome ? homeOffTarget : (snapHomeOff !== null ? snapHomeOff : null);
-    const finalAwayOff = foundAway ? awayOffTarget : (snapAwayOff !== null ? snapAwayOff : null);
-    const finalHomeInside = foundHome ? homeInsideBox : (snapHomeInside !== null ? snapHomeInside : null);
-    const finalAwayInside = foundAway ? awayInsideBox : (snapAwayInside !== null ? snapAwayInside : null);
-    const finalHomeBig = foundHome ? homeBigChances : (snapHomeBig !== null ? snapHomeBig : null);
-    const finalAwayBig = foundAway ? awayBigChances : (snapAwayBig !== null ? snapAwayBig : null);
+    const hasSnapshots = snapHomeShots !== null;
+    const finalHomeShots = hasSnapshots ? Math.max(snapHomeShots!, homeShots) : (hasCommentary ? homeShots : null);
+    const finalAwayShots = snapAwayShots !== null ? Math.max(snapAwayShots, awayShots) : (hasCommentary ? awayShots : null);
+    const finalHomeSot = snapHomeSot !== null ? Math.max(snapHomeSot, homeSot) : (hasCommentary ? homeSot : null);
+    const finalAwaySot = snapAwaySot !== null ? Math.max(snapAwaySot, awaySot) : (hasCommentary ? awaySot : null);
+    const finalHomeOff = snapHomeOff !== null ? Math.max(snapHomeOff, homeOffTarget) : (hasCommentary ? homeOffTarget : null);
+    const finalAwayOff = snapAwayOff !== null ? Math.max(snapAwayOff, awayOffTarget) : (hasCommentary ? awayOffTarget : null);
+    const finalHomeInside = snapHomeInside !== null ? Math.max(snapHomeInside, homeInsideBox) : (hasCommentary ? homeInsideBox : null);
+    const finalAwayInside = snapAwayInside !== null ? Math.max(snapAwayInside, awayInsideBox) : (hasCommentary ? awayInsideBox : null);
+    const finalHomeBig = snapHomeBig !== null ? Math.max(snapHomeBig, homeBigChances) : (hasCommentary ? homeBigChances : null);
+    const finalAwayBig = snapAwayBig !== null ? Math.max(snapAwayBig, awayBigChances) : (hasCommentary ? awayBigChances : null);
 
     const homeBlocked = (finalHomeShots !== null && finalHomeSot !== null && finalHomeOff !== null) 
       ? Math.max(0, finalHomeShots - finalHomeSot - finalHomeOff) 
@@ -324,10 +352,10 @@ export class StatisticsService {
       : 0;
     const homeOutside = (finalHomeShots !== null && finalHomeInside !== null) 
       ? Math.max(0, finalHomeShots - finalHomeInside) 
-      : null;
+      : 0;
     const awayOutside = (finalAwayShots !== null && finalAwayInside !== null) 
       ? Math.max(0, finalAwayShots - finalAwayInside) 
-      : null;
+      : 0;
 
     return {
       home: {
@@ -339,11 +367,11 @@ export class StatisticsService {
         shotsInsideBox: finalHomeInside,
         shotsOutsideBox: homeOutside,
         bigChances: finalHomeBig,
-        corners: homeCorners > 0 ? homeCorners : null,
+        corners: homeCorners,
         yellowCards: homeYellow,
         redCards: homeRed,
         goals: homeGoals,
-        fouls: homeFouls > 0 ? homeFouls : null,
+        fouls: homeFouls,
       },
       away: {
         xg: awayXgDelta,
@@ -354,11 +382,11 @@ export class StatisticsService {
         shotsInsideBox: finalAwayInside,
         shotsOutsideBox: awayOutside,
         bigChances: finalAwayBig,
-        corners: awayCorners > 0 ? awayCorners : null,
+        corners: awayCorners,
         yellowCards: awayYellow,
         redCards: awayRed,
         goals: awayGoals,
-        fouls: awayFouls > 0 ? awayFouls : null,
+        fouls: awayFouls,
       },
     };
   }
@@ -475,16 +503,39 @@ export class StatisticsService {
     const currentMinute = raw.minute;
     const minMinute = Math.max(0, currentMinute - windowMinutes);
 
-    // 1. Calculate real xG delta strictly from historical real database snapshots
+    // 1. Calculate real xG and shot deltas strictly from historical real database snapshots
     let xgDelta: number | null = null;
+    let snapTotalShots: number | null = null;
+    let snapTotalSot: number | null = null;
+    let snapTotalOff: number | null = null;
+    let snapTotalInside: number | null = null;
+    let snapTotalBig: number | null = null;
 
-    if (raw.totalXg !== null && snapshots.length >= 2) {
+    if (snapshots.length >= 2) {
       const sorted = [...snapshots].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const currentSnap = sorted[sorted.length - 1];
-      const pastSnap = sorted.find(s => s.minute <= minMinute && s.minute >= minMinute - 4);
+      const priorSnaps = sorted.filter(s => s.minute <= minMinute);
+      const pastSnap = priorSnaps.length > 0 ? priorSnaps[priorSnaps.length - 1] : sorted[0];
 
-      if (pastSnap && pastSnap.totalXg !== null && currentSnap.totalXg !== null) {
-        xgDelta = Math.max(0, parseFloat((currentSnap.totalXg - pastSnap.totalXg).toFixed(2)));
+      if (pastSnap && currentSnap && pastSnap !== currentSnap) {
+        if (pastSnap.totalXg !== null && currentSnap.totalXg !== null) {
+          xgDelta = Math.max(0, parseFloat((currentSnap.totalXg - pastSnap.totalXg).toFixed(2)));
+        }
+        if (currentSnap.homeShots !== null && pastSnap.homeShots !== null && currentSnap.awayShots !== null && pastSnap.awayShots !== null) {
+          snapTotalShots = Math.max(0, (currentSnap.homeShots + currentSnap.awayShots) - (pastSnap.homeShots + pastSnap.awayShots));
+        }
+        if (currentSnap.homeShotsOnTarget !== null && pastSnap.homeShotsOnTarget !== null && currentSnap.awayShotsOnTarget !== null && pastSnap.awayShotsOnTarget !== null) {
+          snapTotalSot = Math.max(0, (currentSnap.homeShotsOnTarget + currentSnap.awayShotsOnTarget) - (pastSnap.homeShotsOnTarget + pastSnap.awayShotsOnTarget));
+        }
+        if (currentSnap.homeShotsOffTarget !== null && pastSnap.homeShotsOffTarget !== null && currentSnap.awayShotsOffTarget !== null && pastSnap.awayShotsOffTarget !== null) {
+          snapTotalOff = Math.max(0, (currentSnap.homeShotsOffTarget + currentSnap.awayShotsOffTarget) - (pastSnap.homeShotsOffTarget + pastSnap.awayShotsOffTarget));
+        }
+        if (currentSnap.homeShotsInsideBox !== null && pastSnap.homeShotsInsideBox !== null && currentSnap.awayShotsInsideBox !== null && pastSnap.awayShotsInsideBox !== null) {
+          snapTotalInside = Math.max(0, (currentSnap.homeShotsInsideBox + currentSnap.awayShotsInsideBox) - (pastSnap.homeShotsInsideBox + pastSnap.awayShotsInsideBox));
+        }
+        if (currentSnap.homeBigChances !== null && pastSnap.homeBigChances !== null && currentSnap.awayBigChances !== null && pastSnap.awayBigChances !== null) {
+          snapTotalBig = Math.max(0, (currentSnap.homeBigChances + currentSnap.awayBigChances) - (pastSnap.homeBigChances + pastSnap.awayBigChances));
+        }
       }
     }
 
@@ -498,7 +549,7 @@ export class StatisticsService {
 
     if (raw.commentaryPlays && raw.commentaryPlays.length > 0) {
       for (const p of raw.commentaryPlays) {
-        if (p.minute >= minMinute && p.minute <= currentMinute) {
+        if (p.minute > minMinute && p.minute <= currentMinute) {
           const text = p.text.toLowerCase();
           const isShot = text.includes('shot') || text.includes('attempt') || text.includes('goal');
           if (isShot) {
@@ -541,14 +592,20 @@ export class StatisticsService {
       }
     }
 
-    // Return null ("N/D") for anything not backed by real data
+    const hasSnapshots = snapTotalShots !== null;
+    const finalShots = hasSnapshots ? Math.max(snapTotalShots!, windowShots) : (playsFound ? windowShots : null);
+    const finalSot = snapTotalSot !== null ? Math.max(snapTotalSot, windowSOT) : (playsFound ? windowSOT : null);
+    const finalOff = snapTotalOff !== null ? Math.max(snapTotalOff, windowOffTarget) : (playsFound ? windowOffTarget : null);
+    const finalInside = snapTotalInside !== null ? Math.max(snapTotalInside, windowInsideBox) : (playsFound ? windowInsideBox : null);
+    const finalBig = snapTotalBig !== null ? Math.max(snapTotalBig, windowBigChances) : (playsFound ? windowBigChances : null);
+
     return {
       xg: xgDelta,
-      totalShots: playsFound ? windowShots : null,
-      shotsOnTarget: playsFound ? windowSOT : null,
-      shotsOffTarget: playsFound ? windowOffTarget : null,
-      shotsInsideBox: playsFound ? windowInsideBox : null,
-      bigChances: playsFound ? windowBigChances : null,
+      totalShots: finalShots,
+      shotsOnTarget: finalSot,
+      shotsOffTarget: finalOff,
+      shotsInsideBox: finalInside,
+      bigChances: finalBig,
     };
   }
 }

@@ -5,13 +5,14 @@ import { RawMatchSummary, SoccerDataProvider } from '../providers/types.ts';
 import { historyService } from './history.ts';
 import { signalsService } from './signals.ts';
 import { statisticsService } from './statistics.ts';
+import { suggestionsService } from './suggestions.ts';
 
 class GamesService {
   private provider: SoccerDataProvider = new EspnProvider();
   private cachedMatches: Map<string, LiveMatchData> = new Map();
   private lastFetchTime = 0;
   private settings: SystemSettings = {
-    pollIntervalSeconds: 30,
+    pollIntervalSeconds: 60,
     isAutoRefreshActive: true,
     overLimiteRefOdd: 2.0,
     overFrenteRefOdd: 3.0,
@@ -20,6 +21,7 @@ class GamesService {
     activeProvider: 'ESPN Public API',
   };
   private pollTimer: NodeJS.Timeout | null = null;
+  private isPolling = false;
 
   constructor() {
     this.init();
@@ -74,6 +76,11 @@ class GamesService {
   }
 
   public async pollMatches(): Promise<LiveMatchData[]> {
+    if (this.isPolling) {
+      return Array.from(this.cachedMatches.values());
+    }
+    this.isPolling = true;
+
     try {
       console.log('[ESPN] Requesting scoreboard...');
       const activeCompetitions = dbService.getCompetitions()
@@ -109,6 +116,13 @@ class GamesService {
         }
       }
 
+      // Automatically evaluate suggestions and audit results
+      try {
+        suggestionsService.evaluateMatches(processedMatches, rawMatches);
+      } catch (sugErr: any) {
+        console.error('[GamesService] Error evaluating suggestions:', sugErr?.message || sugErr);
+      }
+
       console.log('[ESPN] Database updated');
       this.settings.lastPollTimestamp = nowIso;
       this.lastFetchTime = Date.now();
@@ -117,6 +131,8 @@ class GamesService {
       console.error('[ESPN] Request failed:', err?.message || err);
       console.error('[ESPN] No mock fallback enabled');
       return Array.from(this.cachedMatches.values());
+    } finally {
+      this.isPolling = false;
     }
   }
 
@@ -145,20 +161,44 @@ class GamesService {
     const accumulated = statisticsService.parseAccumulatedStats(raw);
     const { home: homeStats, away: awayStats } = statisticsService.parseTeamDetailedStats(raw);
 
-    // Compute recent stats using real snapshot deltas or real commentary plays
-    const recent10 = statisticsService.computeRecentStats(raw, accumulated, existingSnapshots, 10);
-    const recent15 = statisticsService.computeRecentStats(raw, accumulated, existingSnapshots, 15);
-    const recent5 = statisticsService.computeRecentStats(raw, accumulated, existingSnapshots, 5);
+    // Create current snapshot with real values
+    const currentSnapshot: GameSnapshot = {
+      gameId: raw.id,
+      timestamp: nowIso,
+      minute,
+      homeScore: raw.homeTeam.score,
+      awayScore: raw.awayTeam.score,
+      homeXg: raw.homeXg,
+      awayXg: raw.awayXg,
+      totalXg: accumulated.xg,
+      homeShots: homeStats.totalShots,
+      awayShots: awayStats.totalShots,
+      homeShotsOnTarget: homeStats.shotsOnTarget,
+      awayShotsOnTarget: awayStats.shotsOnTarget,
+      homeShotsOffTarget: homeStats.shotsOffTarget,
+      awayShotsOffTarget: awayStats.shotsOffTarget,
+      homeShotsInsideBox: homeStats.shotsInsideBox,
+      awayShotsInsideBox: awayStats.shotsInsideBox,
+      homeBigChances: homeStats.bigChances,
+      awayBigChances: awayStats.bigChances,
+    };
 
-    const r5Teams = statisticsService.computeRecentStatsByTeam(raw, existingSnapshots, 5);
-    const r10Teams = statisticsService.computeRecentStatsByTeam(raw, existingSnapshots, 10);
-    const r15Teams = statisticsService.computeRecentStatsByTeam(raw, existingSnapshots, 15);
+    // Store snapshot to PostgreSQL
+    dbService.insertSnapshot(currentSnapshot);
+
+    const allSnapshots = [...existingSnapshots, currentSnapshot];
+
+    // Compute recent stats using real snapshot deltas or real commentary plays
+    const recent10 = statisticsService.computeRecentStats(raw, accumulated, allSnapshots, 10);
+    const recent15 = statisticsService.computeRecentStats(raw, accumulated, allSnapshots, 15);
+    const recent5 = statisticsService.computeRecentStats(raw, accumulated, allSnapshots, 5);
+
+    const r5Teams = statisticsService.computeRecentStatsByTeam(raw, allSnapshots, 5);
+    const r10Teams = statisticsService.computeRecentStatsByTeam(raw, allSnapshots, 10);
+    const r15Teams = statisticsService.computeRecentStatsByTeam(raw, allSnapshots, 15);
 
     // Compute Target Over and real found odd
-    const targetOver = signalsService.computeTargetOver(tab, totalScore, raw.oddsList);
-
-    // Evaluate Intensity based strictly on real xG deltas
-    const intensity = signalsService.evaluateIntensity(recent15.xg, recent10.xg, recent5.xg);
+    const targetOver = signalsService.computeTargetOver(tab, totalScore, raw.oddsList, minute, accumulated.xg);
 
     // Calculate historical probability for the target line strictly on past games of same competition/season
     let history: MatchHistoricalProbability | undefined = undefined;
@@ -187,30 +227,14 @@ class GamesService {
       console.warn(`[GamesService] Error computing history for game ${raw.id}:`, hErr?.message || hErr);
     }
 
-    // Create current snapshot with real values
-    const currentSnapshot: GameSnapshot = {
-      gameId: raw.id,
-      timestamp: nowIso,
-      minute,
-      homeScore: raw.homeTeam.score,
-      awayScore: raw.awayTeam.score,
-      homeXg: raw.homeXg,
-      awayXg: raw.awayXg,
-      totalXg: accumulated.xg,
-      homeShots: homeStats.totalShots,
-      awayShots: awayStats.totalShots,
-      homeShotsOnTarget: homeStats.shotsOnTarget,
-      awayShotsOnTarget: awayStats.shotsOnTarget,
-      homeShotsOffTarget: homeStats.shotsOffTarget,
-      awayShotsOffTarget: awayStats.shotsOffTarget,
-      homeShotsInsideBox: homeStats.shotsInsideBox,
-      awayShotsInsideBox: awayStats.shotsInsideBox,
-      homeBigChances: homeStats.bigChances,
-      awayBigChances: awayStats.bigChances,
-    };
-
-    // Store snapshot to PostgreSQL
-    dbService.insertSnapshot(currentSnapshot);
+    // Evaluate Intensity based on real xG deltas AND historical Over rate of indicated line
+    const intensity = signalsService.evaluateIntensity(
+      recent15.xg,
+      recent10.xg,
+      recent5.xg,
+      history,
+      targetOver.targetLine
+    );
 
     // Record signal in DB
     dbService.recordSignal({
@@ -226,8 +250,6 @@ class GamesService {
       xg10: intensity.xg10,
       xg5: intensity.xg5,
     });
-
-    const allSnapshots = [...existingSnapshots, currentSnapshot];
 
     return {
       id: raw.id,

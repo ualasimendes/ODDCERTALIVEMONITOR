@@ -32,12 +32,12 @@ export const DiagnosticsModal: React.FC<DiagnosticsModalProps> = ({ isOpen, onCl
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div
         id="diagnostics-modal"
-        className="bg-slate-900 border border-slate-750 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-8"
+        className="bg-slate-900 border border-slate-750 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-8"
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between rounded-t-3xl">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400">
+            <div className="p-2.5 rounded-2xl bg-sky-500/10 border border-sky-500/30 text-sky-400">
               <Code className="w-5 h-5" />
             </div>
             <div>
@@ -53,7 +53,7 @@ export const DiagnosticsModal: React.FC<DiagnosticsModalProps> = ({ isOpen, onCl
           <button
             id="btn-close-diagnostics-modal"
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

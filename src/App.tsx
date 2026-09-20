@@ -1,27 +1,40 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Header } from './components/Header.tsx';
 import { MainTabs } from './components/MainTabs.tsx';
-import { TabSummary } from './components/TabSummary.tsx';
 import { FilterBar } from './components/FilterBar.tsx';
 import { CompetitionGroup } from './components/CompetitionGroup.tsx';
 import { MatchDetailModal } from './components/MatchDetailModal.tsx';
-import { SettingsModal } from './components/SettingsModal.tsx';
-import { DiagnosticsModal } from './components/DiagnosticsModal.tsx';
-import { fetchGames, triggerRefresh, updateSettings } from './services/api.ts';
+import { SuggestionsView } from './components/SuggestionsView.tsx';
+import { fetchGames, fetchSuggestions, triggerRefresh, updateSettings } from './services/api.ts';
 import {
+  ActiveScreenMode,
   IntensityLevel,
   LiveMatchData,
+  LiveSuggestionItem,
   MinuteFilterOption,
   OddFilterOption,
   SortField,
+  SuggestionsSummary,
   SystemSettings,
   TabType,
 } from './types.ts';
-import { ShieldAlert, AlertCircle, RefreshCw, Inbox, RotateCcw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Inbox, RotateCcw, Radio, Sparkles } from 'lucide-react';
 
 export function App() {
-  // 1. Navigation (Section 1 & 2: As 3 abas principais)
-  const [currentTab, setCurrentTab] = useState<TabType>('over_limite');
+  // Navigation Screens: LIVE MONITOR vs ENTRADAS SUGERIDAS
+  const [activeScreenMode, setActiveScreenMode] = useState<ActiveScreenMode>('live_monitor');
+  const [suggestions, setSuggestions] = useState<LiveSuggestionItem[]>([]);
+  const [suggestionsSummary, setSuggestionsSummary] = useState<SuggestionsSummary>({
+    total: 0,
+    greens: 0,
+    reds: 0,
+    pending: 0,
+    accuracyRate: 0,
+  });
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+
+  // 1. Navigation (Section 1 & 2: As abas principais incluindo TODOS OS JOGOS)
+  const [currentTab, setCurrentTab] = useState<TabType>('all');
 
   // 2. Filters State (Section 5-11, 16, 17: persistentes ao trocar de aba)
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -36,12 +49,13 @@ export function App() {
   // 3. Raw Data & Counts from Server
   const [rawMatches, setRawMatches] = useState<LiveMatchData[]>([]);
   const [counts, setCounts] = useState({
+    all: 0,
     over_limite: 0,
     over_frente: 0,
     over_longa: 0,
   });
   const [settings, setSettings] = useState<SystemSettings>({
-    pollIntervalSeconds: 30,
+    pollIntervalSeconds: 60,
     isAutoRefreshActive: true,
     overLimiteRefOdd: 2.0,
     overFrenteRefOdd: 3.0,
@@ -52,30 +66,48 @@ export function App() {
 
   // 4. Modal states
   const [selectedMatch, setSelectedMatch] = useState<LiveMatchData | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
 
   // 5. Loading & Timer state
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(30);
+  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(60);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastSuccessTime, setLastSuccessTime] = useState<string | null>(null);
 
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load matches from backend API
+  // Load suggestions from backend API
+  const loadSuggestions = useCallback(async () => {
+    setIsLoadingSuggestions(true);
+    try {
+      const res = await fetchSuggestions();
+      if (res && res.data) {
+        setSuggestions(res.data);
+        if (res.summary) {
+          setSuggestionsSummary(res.summary);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao buscar sugestões:', err);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, []);
+
+  // Load matches & suggestions from backend API
   const loadData = useCallback(async (showSpinner = false) => {
     if (showSpinner) setIsRefreshing(true);
     try {
-      // Fetch all matches or tab matches
-      const res = await fetchGames({
-        tab: currentTab,
-      });
+      const [resGames, resSug] = await Promise.allSettled([
+        fetchGames({ tab: currentTab }),
+        fetchSuggestions(),
+      ]);
 
-      if (res.success) {
+      if (resGames.status === 'fulfilled' && resGames.value.success) {
+        const res = resGames.value;
         setRawMatches(res.data || []);
         setCounts({
+          all: res.counts.all ?? (res.counts.over_limite || 0) + (res.counts.over_frente || 0) + (res.counts.over_longa || 0),
           over_limite: res.counts.over_limite || 0,
           over_frente: res.counts.over_frente || 0,
           over_longa: res.counts.over_longa || 0,
@@ -85,9 +117,19 @@ export function App() {
         }
         setErrorMessage(null);
         setLastSuccessTime(new Date().toLocaleTimeString());
+      } else if (resGames.status === 'rejected') {
+        console.error('Erro ao buscar partidas:', resGames.reason);
+        setErrorMessage('Falha ao conectar com o serviço de partidas ESPN.');
+      }
+
+      if (resSug.status === 'fulfilled' && resSug.value && resSug.value.data) {
+        setSuggestions(resSug.value.data);
+        if (resSug.value.summary) {
+          setSuggestionsSummary(resSug.value.summary);
+        }
       }
     } catch (err: any) {
-      console.error('Erro ao buscar partidas:', err);
+      console.error('Erro ao buscar partidas e sugestões:', err);
       setErrorMessage('Falha ao conectar com o serviço de partidas ESPN.');
     } finally {
       setIsLoading(false);
@@ -104,7 +146,7 @@ export function App() {
   useEffect(() => {
     if (!settings.isAutoRefreshActive) return;
 
-    setSecondsUntilRefresh(settings.pollIntervalSeconds || 30);
+    setSecondsUntilRefresh(settings.pollIntervalSeconds || 60);
 
     if (countdownTimerRef.current) {
       clearInterval(countdownTimerRef.current);
@@ -114,7 +156,7 @@ export function App() {
       setSecondsUntilRefresh((prev) => {
         if (prev <= 1) {
           loadData();
-          return settings.pollIntervalSeconds || 30;
+          return settings.pollIntervalSeconds || 60;
         }
         return prev - 1;
       });
@@ -135,7 +177,7 @@ export function App() {
       console.error(e);
     } finally {
       setIsRefreshing(false);
-      setSecondsUntilRefresh(settings.pollIntervalSeconds || 30);
+      setSecondsUntilRefresh(settings.pollIntervalSeconds || 60);
     }
   };
 
@@ -143,7 +185,7 @@ export function App() {
   const availableCompetitions = useMemo(() => {
     const compSet = new Set<string>();
     for (const m of rawMatches) {
-      if (m.tab === currentTab && m.competitionName) {
+      if ((currentTab === 'all' || m.tab === currentTab) && m.competitionName) {
         compSet.add(m.competitionName);
       }
     }
@@ -169,7 +211,7 @@ export function App() {
 
   // Filter and sort matches strictly according to user selections
   const filteredAndSortedMatches = useMemo(() => {
-    let result = rawMatches.filter((m) => m.tab === currentTab);
+    let result = currentTab === 'all' ? [...rawMatches] : rawMatches.filter((m) => m.tab === currentTab);
 
     // Dynamic Competition filter (Section 6)
     if (selectedCompetition !== 'ALL') {
@@ -275,22 +317,10 @@ export function App() {
     return groups;
   }, [filteredAndSortedMatches]);
 
-  // Tab stats for the summary panel (Section 4)
-  const tabRawMatches = useMemo(() => {
-    return rawMatches.filter((m) => m.tab === currentTab);
-  }, [rawMatches, currentTab]);
-
-  const hotCount = useMemo(() => {
-    return tabRawMatches.filter((m) => m.intensity.primaryTag === 'HOT').length;
-  }, [tabRawMatches]);
-
-  const megaHotCount = useMemo(() => {
-    return tabRawMatches.filter((m) => m.intensity.primaryTag === 'MEGA_HOT').length;
-  }, [tabRawMatches]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
-      {/* 1. BARRA SUPERIOR (Section 1 & 24) */}
+    <div className="relative min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+      {/* 1. BARRA SUPERIOR */}
       <Header
         settings={settings}
         secondsUntilRefresh={secondsUntilRefresh}
@@ -298,116 +328,208 @@ export function App() {
         apiStatus={errorMessage ? 'offline' : rawMatches.length > 0 ? 'live' : 'no_data'}
         lastSuccessTime={lastSuccessTime}
         onRefreshNow={handleRefreshNow}
-        onToggleAutoRefresh={() => {
-          const updated = !settings.isAutoRefreshActive;
-          setSettings((s) => ({ ...s, isAutoRefreshActive: updated }));
-          updateSettings({ isAutoRefreshActive: updated });
-        }}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenDiagnostics={() => setIsDiagnosticsOpen(true)}
       />
 
+      {/* Imagem Divertida de Fundo (Tema Futebol e Gol) preenchendo o espaço do Main */}
+      <div className="fixed inset-0 top-[65px] pointer-events-none z-0 overflow-hidden">
+        <img
+          src="/fun_soccer_goal_bg.jpg"
+          alt="Fundo divertido de futebol e gol"
+          className="w-full h-full object-cover object-center opacity-25"
+          loading="eager"
+        />
+        {/* Camadas de gradiente para manter legibilidade impecável dos dados */}
+        <div className="absolute inset-0 bg-slate-950/70" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-transparent to-slate-950/90" />
+      </div>
+
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 space-y-4">
+      <main className="relative z-10 flex-1 max-w-7xl 2xl:max-w-[1536px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
         {/* Error message if disconnected */}
         {errorMessage && (
-          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3 rounded-xl flex items-center justify-between text-xs font-mono">
+          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3 rounded-2xl flex items-center justify-between text-xs font-mono">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-400" />
               <span>{errorMessage}</span>
             </div>
             <button
               onClick={handleRefreshNow}
-              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded border border-rose-500/40 text-[11px] cursor-pointer"
+              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded-xl border border-rose-500/40 text-[11px] cursor-pointer transition-colors"
             >
               Tentar reconectar
             </button>
           </div>
         )}
 
-        {/* 2. ABAS PRINCIPAIS (Section 1 & 2: OVER LIMITE, OVER À FRENTE, OVER LONGA) */}
-        <MainTabs
-          currentTab={currentTab}
-          onSelectTab={(tab) => {
-            setCurrentTab(tab);
-            // Notice: Section 17: "Ao trocar de aba: os filtros devem permanecer."
-          }}
-          counts={counts}
-        />
-
-        {/* 3. RESUMO DOS JOGOS (Section 1 & 4: Painel de Resumo da Aba) */}
-        <TabSummary
-          currentTab={currentTab}
-          totalInTab={tabRawMatches.length}
-          filteredCount={filteredAndSortedMatches.length}
-          hotCount={hotCount}
-          megaHotCount={megaHotCount}
-          lastUpdated={lastSuccessTime}
-          activeFilterDescriptions={activeFilterDescriptions}
-          onClearFilters={handleResetFilters}
-        />
-
-        {/* 4. FILTRO DE CAMPEONATOS (Opções lateralizadas com clique direto) */}
-        <FilterBar
-          availableCompetitions={availableCompetitions}
-          selectedCompetition={selectedCompetition}
-          onSelectCompetition={setSelectedCompetition}
-          onResetFilters={handleResetFilters}
-          hasActiveFilters={hasActiveFilters}
-        />
-
-        {/* 5. LISTA DE PARTIDAS AGRUPADA POR CAMPEONATO (Section 1, 12, 13, 19) */}
-        <div id="matches-section" className="space-y-6 pt-2">
-          {isLoading && rawMatches.length === 0 ? (
-            <div className="py-16 text-center text-slate-400 font-mono text-xs flex flex-col items-center justify-center gap-3">
-              <RefreshCw className="w-6 h-6 animate-spin text-emerald-400" />
-              <span>Conectando e processando partidas ao vivo da ESPN...</span>
-            </div>
-          ) : groupedMatches.length > 0 ? (
-            groupedMatches.map((group) => (
-              <CompetitionGroup
-                key={group.competitionName}
-                competitionName={group.competitionName}
-                matches={group.matches}
-                onOpenDetailModal={(m) => setSelectedMatch(m)}
-              />
-            ))
-          ) : (
-            /* Section 19: SEM DADOS */
-            <div
-              id="empty-state"
-              className="py-16 px-4 bg-slate-900/60 border border-slate-800 rounded-2xl text-center font-mono flex flex-col items-center justify-center space-y-3"
+        {/* SELETOR DE TELAS: LIVE MONITOR vs ENTRADAS SUGERIDAS */}
+        <div className="w-full bg-slate-900/95 border border-slate-800 rounded-2xl p-1.5 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="grid grid-cols-2 gap-1.5 w-full sm:w-auto sm:min-w-[460px]">
+            {/* TELA 1: LIVE MONITOR */}
+            <button
+              id="screen-btn-live-monitor"
+              type="button"
+              role="tab"
+              aria-selected={activeScreenMode === 'live_monitor'}
+              onClick={() => setActiveScreenMode('live_monitor')}
+              className={`px-4 py-2.5 rounded-xl font-sans font-bold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border select-none ${
+                activeScreenMode === 'live_monitor'
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-950/40'
+                  : 'bg-slate-950/80 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+              }`}
             >
-              <div className="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-400">
-                <Inbox className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-200">Nenhum jogo encontrado</h3>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  {hasActiveFilters
-                    ? 'Não há partidas que correspondam aos filtros atuais nesta janela.'
-                    : `Não há partidas em andamento nesta janela temporal (${
-                        currentTab === 'over_limite'
-                          ? '> 75\''
-                          : currentTab === 'over_frente'
-                          ? '> 60\' até 75\''
-                          : '25\' até 45\''
-                      }) no momento.`}
-                </p>
-              </div>
+              <Radio
+                className={`w-4 h-4 shrink-0 ${
+                  activeScreenMode === 'live_monitor' ? 'text-slate-950 animate-pulse' : 'text-emerald-400'
+                }`}
+              />
+              <span className="whitespace-nowrap">LIVE MONITOR</span>
+              <span
+                className={`text-[10px] sm:text-xs font-mono font-bold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
+                  activeScreenMode === 'live_monitor'
+                    ? 'bg-slate-950/20 text-slate-950 border-slate-950/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-750'
+                }`}
+              >
+                {counts.all}
+              </span>
+            </button>
 
-              {hasActiveFilters && (
-                <button
-                  onClick={handleResetFilters}
-                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-semibold cursor-pointer transition-colors"
+            {/* TELA 2: ENTRADAS SUGERIDAS */}
+            <button
+              id="screen-btn-suggestions"
+              type="button"
+              role="tab"
+              aria-selected={activeScreenMode === 'suggestions'}
+              onClick={() => setActiveScreenMode('suggestions')}
+              className={`px-4 py-2.5 rounded-xl font-sans font-bold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border select-none ${
+                activeScreenMode === 'suggestions'
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-950/40'
+                  : 'bg-slate-950/80 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+              }`}
+            >
+              <Sparkles
+                className={`w-4 h-4 shrink-0 ${
+                  activeScreenMode === 'suggestions' ? 'text-slate-950' : 'text-amber-400'
+                }`}
+              />
+              <span className="whitespace-nowrap">ENTRADAS SUGERIDAS</span>
+              <span
+                className={`text-[10px] sm:text-xs font-mono font-bold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
+                  activeScreenMode === 'suggestions'
+                    ? 'bg-slate-950/20 text-slate-950 border-slate-950/30'
+                    : 'bg-slate-900 text-amber-300 border-slate-750'
+                }`}
+              >
+                {suggestionsSummary.total}
+              </span>
+              {suggestionsSummary.greens > 0 && (
+                <span
+                  className={`hidden sm:inline-flex text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap ${
+                    activeScreenMode === 'suggestions'
+                      ? 'bg-slate-950/30 text-slate-950'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Limpar Filtros</span>
-                </button>
+                  {suggestionsSummary.accuracyRate}% Green
+                </span>
+              )}
+            </button>
+          </div>
+
+          <div className="hidden sm:flex items-center text-[11px] font-mono text-slate-400 px-2 gap-2">
+            <span>
+              {activeScreenMode === 'live_monitor'
+                ? 'Visualizando monitor em tempo real'
+                : 'Sugestões automáticas baseadas em xG e pressão'}
+            </span>
+          </div>
+        </div>
+
+        {/* RENDERIZAÇÃO CONDICIONAL DA TELA SELECIONADA */}
+        {activeScreenMode === 'live_monitor' ? (
+          <>
+            {/* 2. ABAS PRINCIPAIS (TODOS OS JOGOS, OVER LIMITE, OVER À FRENTE, OVER LONGA) */}
+            <MainTabs
+              currentTab={currentTab}
+              onSelectTab={(tab) => {
+                setCurrentTab(tab);
+              }}
+              counts={counts}
+            />
+
+            {/* 3. FILTRO DE CAMPEONATOS */}
+            <FilterBar
+              availableCompetitions={availableCompetitions}
+              selectedCompetition={selectedCompetition}
+              onSelectCompetition={setSelectedCompetition}
+              onResetFilters={handleResetFilters}
+              hasActiveFilters={hasActiveFilters}
+            />
+
+            {/* 5. LISTA DE PARTIDAS AGRUPADA POR CAMPEONATO */}
+            <div id="matches-section" className="space-y-6 pt-2">
+              {isLoading && rawMatches.length === 0 ? (
+                <div className="py-16 text-center text-slate-400 font-mono text-xs flex flex-col items-center justify-center gap-3">
+                  <RefreshCw className="w-6 h-6 animate-spin text-emerald-400" />
+                  <span>Conectando e processando partidas ao vivo da ESPN...</span>
+                </div>
+              ) : groupedMatches.length > 0 ? (
+                groupedMatches.map((group) => (
+                  <CompetitionGroup
+                    key={group.competitionName}
+                    competitionName={group.competitionName}
+                    matches={group.matches}
+                    currentTab={currentTab}
+                    onOpenDetailModal={(m) => setSelectedMatch(m)}
+                  />
+                ))
+              ) : (
+                /* SEM DADOS */
+                <div
+                  id="empty-state"
+                  className="py-16 px-4 bg-slate-900/60 border border-slate-800 rounded-3xl text-center font-mono flex flex-col items-center justify-center space-y-3"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-400">
+                    <Inbox className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-slate-200">Nenhum jogo encontrado</h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      {hasActiveFilters
+                        ? 'Não há partidas que correspondam aos filtros selecionados.'
+                        : currentTab === 'all'
+                        ? 'Não há partidas ao vivo em andamento no momento.'
+                        : `Não há partidas em andamento nesta janela temporal (${
+                            currentTab === 'over_limite'
+                              ? '> 75\''
+                              : currentTab === 'over_frente'
+                              ? '> 60\' até 75\''
+                              : '25\' até 45\''
+                          }) no momento.`}
+                    </p>
+                  </div>
+
+                  {hasActiveFilters && (
+                    <button
+                      onClick={handleResetFilters}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Limpar Filtros</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <SuggestionsView
+            suggestions={suggestions}
+            summary={suggestionsSummary}
+            isLoading={isLoadingSuggestions}
+            onRefresh={loadSuggestions}
+          />
+        )}
       </main>
 
       {/* Footer Disclaimer */}
@@ -415,29 +537,13 @@ export function App() {
         ODDCERTA Live Monitor • Monitoramento analítico em tempo real • Sem recomendações automáticas de aposta • Fonte ESPN Pública
       </footer>
 
-      {/* Modais */}
+      {/* Modal de Detalhes da Partida */}
       {selectedMatch && (
         <MatchDetailModal
           match={selectedMatch}
           onClose={() => setSelectedMatch(null)}
         />
       )}
-
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        currentSettings={settings}
-        onSettingsUpdated={(newSettings: SystemSettings) => {
-          setSettings(newSettings);
-          setIsSettingsOpen(false);
-          loadData(true);
-        }}
-      />
-
-      <DiagnosticsModal
-        isOpen={isDiagnosticsOpen}
-        onClose={() => setIsDiagnosticsOpen(false)}
-      />
     </div>
   );
 }

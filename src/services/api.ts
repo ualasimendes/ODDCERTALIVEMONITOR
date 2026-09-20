@@ -1,4 +1,4 @@
-import { CompetitionConfig, LiveMatchData, MatchHistoricalProbability, SystemSettings } from '../types.ts';
+import { CompetitionConfig, LiveMatchData, LiveSuggestionItem, MatchHistoricalProbability, SuggestionCriteriaConfig, SuggestionsSummary, SystemSettings } from '../types.ts';
 
 export interface GamesApiResponse {
   success: boolean;
@@ -81,6 +81,37 @@ export async function fetchInspection(): Promise<any> {
 export async function fetchGameHistory(id: string, line?: number): Promise<MatchHistoricalProbability> {
   const query = line !== undefined ? `?line=${line}` : '';
   const res = await fetch(`/api/games/${id}/history${query}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return data.data;
+}
+
+export async function fetchSuggestions(params?: {
+  status?: string;
+  type?: string;
+}): Promise<{ data: LiveSuggestionItem[]; summary: SuggestionsSummary }> {
+  const query = new URLSearchParams();
+  if (params?.status && params.status !== 'ALL') query.set('status', params.status);
+  if (params?.type && params.type !== 'ALL') query.set('type', params.type);
+
+  const res = await fetch(`/api/suggestions?${query.toString()}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function fetchSuggestionCriteria(): Promise<SuggestionCriteriaConfig> {
+  const res = await fetch('/api/suggestions/criteria');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return data.data;
+}
+
+export async function updateSuggestionCriteria(config: Partial<SuggestionCriteriaConfig>): Promise<SuggestionCriteriaConfig> {
+  const res = await fetch('/api/suggestions/criteria', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   return data.data;
